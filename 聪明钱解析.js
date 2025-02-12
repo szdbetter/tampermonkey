@@ -460,24 +460,6 @@
             const table = document.createElement('table');
             table.style.cssText = 'width: 100%; border-collapse: collapse;';
 
-            // 创建表头
-            const thead = document.createElement('thead');
-            thead.style.cssText = 'background-color: #f2f2f2;';
-            const headerRow = document.createElement('tr');
-            const headers = ['名称', '合约', '聪明钱', '买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '创建时间'];
-
-            headers.forEach(headerText => {
-                const th = document.createElement('th');
-                th.textContent = headerText;
-                th.style.cssText = 'border: 1px solid #ddd; padding: 8px; text-align: left;';
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-            table.appendChild(thead);
-
-            // 创建表体
-            const tbody = document.createElement('tbody');
-
             // 打开数据库并读取数据
             const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
             const store = transaction.objectStore(this.db.storeName);
@@ -485,7 +467,49 @@
 
             request.onsuccess = (event) => {
                 const traders = event.target.result;
-                traders.forEach(trader => {
+
+                // 按照创建时间倒序、合约和profit_tag顺序排序
+                const sortedTraders = traders.sort((a, b) => {
+                    // 先按创建时间倒序
+                    const timeComparison = new Date(b.create_time) - new Date(a.create_time);
+                    if (timeComparison !== 0) return timeComparison;
+
+                    // 再按合约顺序
+                    const caComparison = a.ca.localeCompare(b.ca);
+                    if (caComparison !== 0) return caComparison;
+
+                    // 最后按profit_tag顺序
+                    return (a.profit_tag || 0) - (b.profit_tag || 0);
+                });
+
+                // 统计代币数量和记录数量
+                const uniqueTokens = new Set(sortedTraders.map(trader => trader.name));
+                const tokenCount = uniqueTokens.size;
+                const recordCount = sortedTraders.length;
+
+                // 更新标题
+                const title = this.dataViewerModal.children[0];
+                title.textContent = `聪明钱数据库 (共${tokenCount}个代币，${recordCount}条记录)`;
+
+                // 创建表头
+                const thead = document.createElement('thead');
+                thead.style.cssText = 'background-color: #f2f2f2;';
+                const headerRow = document.createElement('tr');
+                const headers = ['名称', '合约', '聪明钱', '买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '创建时间'];
+
+                headers.forEach(headerText => {
+                    const th = document.createElement('th');
+                    th.textContent = headerText;
+                    th.style.cssText = 'border: 1px solid #ddd; padding: 8px; text-align: left;';
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+                table.appendChild(thead);
+
+                // 创建表体
+                const tbody = document.createElement('tbody');
+
+                sortedTraders.forEach(trader => {
                     const row = document.createElement('tr');
                     row.style.cssText = 'border-bottom: 1px solid #ddd;';
 
