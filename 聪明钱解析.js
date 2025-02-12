@@ -135,10 +135,9 @@
                         store.createIndex('user_name', 'user_name', { unique: false });
                         store.createIndex('realized_profit', 'realized_profit', { unique: false });
                         store.createIndex('profit_tag', 'profit_tag', { unique: false });
-                        
+
                         // 新增的索引
                         store.createIndex('dev', 'dev', { unique: false });
-                        store.createIndex('create_time', 'create_time', { unique: false });
                         store.createIndex('last_trade_time', 'last_trade_time', { unique: false });
                     }
                 };
@@ -168,10 +167,9 @@
                             user_name: trader.user_name,
                             profit_tag: trader.profit_tag,
                             update_time: trader.update_time,
-                            
+
                             // 新增字段
                             dev: trader.dev,
-                            create_time: trader.create_time,
                             last_trade_time: trader.last_trade_time
                         };
                         store.put(updatedTrader);
@@ -257,15 +255,13 @@
                                         'Symbol': tokenInfo.symbol,
                                         'Name': tokenInfo.name,
                                         'Dev': tokenInfo.creator,
-                                        '创建时间': new Date(tokenInfo.created_timestamp).toLocaleString(),
                                         '最后交易时间': new Date(tokenInfo.last_trade_timestamp).toLocaleString()
                                     }], '代币详细信息');
-                                    
+
                                     // 返回一个包含更多信息的对象
                                     resolve({
                                         symbol: tokenInfo.symbol || 'Unknown Token',
                                         dev: tokenInfo.creator,
-                                        create_time: tokenInfo.created_timestamp,
                                         last_trade_time: tokenInfo.last_trade_timestamp
                                     });
                                 } else {
@@ -273,7 +269,6 @@
                                     resolve({
                                         symbol: 'Unknown Token',
                                         dev: '',
-                                        create_time: null,
                                         last_trade_time: null
                                     });
                                 }
@@ -282,7 +277,6 @@
                                 resolve({
                                     symbol: 'Unknown Token',
                                     dev: '',
-                                    create_time: null,
                                     last_trade_time: null
                                 });
                             }
@@ -298,7 +292,6 @@
                 return {
                     symbol: 'Unknown Token',
                     dev: '',
-                    create_time: null,
                     last_trade_time: null
                 };
             }
@@ -404,10 +397,9 @@
                         user_name: item.name || '',
                         profit_tag: index + 1, // 增加利润排名
                         update_time: this.getBeijingTime(),
-                        
+
                         // 新增字段
                         dev: this.tokenName.dev,
-                        create_time: this.tokenName.create_time,
                         last_trade_time: this.tokenName.last_trade_time
                     };
 
@@ -568,7 +560,7 @@
                 const thead = document.createElement('thead');
                 thead.style.cssText = 'background-color: #f2f2f2;';
                 const headerRow = document.createElement('tr');
-                const headers = ['名称', '合约', '聪明钱', '买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '更新时间'];
+                const headers = ['名称', '合约', '聪明钱',  'Dev',  'Pump最后交易时间','买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '更新时间'];
 
                 headers.forEach(headerText => {
                     const th = document.createElement('th');
@@ -590,13 +582,16 @@
                         trader.name,
                         trader.ca,
                         trader.address,
+                        trader.dev || 'N/A',
+                        trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
                         this.formatNumberWithCommas(trader.buy_volume),
                         this.formatNumberWithCommas(trader.sell_volume),
                         this.formatNumberWithCommas(trader.realized_profit),
                         trader.twitter_username || 'N/A',
                         trader.user_name || 'Unknown',
                         trader.profit_tag || 'N/A',
-                        trader.update_time
+                        trader.update_time,
+
                     ];
 
                     rowData.forEach(cellData => {
@@ -627,14 +622,17 @@
                 const worksheet = XLSX.utils.json_to_sheet(traders.map(trader => ({
                     '名称': trader.name,
                     '合约': trader.ca,
-                    '钱包': trader.address,
+                    'Dev': trader.dev || 'N/A',
+                    'Pump最后交易时间': trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
+                    '聪明钱': trader.address,
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
                     '到手利润': this.formatNumberWithCommas(trader.realized_profit),
                     'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'Unknown',
                     '利润排名': trader.profit_tag || 'N/A',
-                    '更新时间': trader.update_time
+                    '更新时间': trader.update_time,
+
                 })));
 
                 const workbook = XLSX.utils.book_new();
