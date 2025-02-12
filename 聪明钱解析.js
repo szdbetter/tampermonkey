@@ -139,7 +139,7 @@
                         // 新增的索引
                         store.createIndex('dev', 'dev', { unique: false });
                         store.createIndex('last_trade_time', 'last_trade_time', { unique: false });
-                        
+
                         // 新增字段索引
                         store.createIndex('sol_balance', 'sol_balance', { unique: false });
                         store.createIndex('last_active_time', 'last_active_time', { unique: false });
@@ -178,7 +178,7 @@
                             // 新增字段
                             dev: trader.dev,
                             last_trade_time: trader.last_trade_time,
-                            
+
                             // 新增的字段
                             sol_balance: trader.sol_balance,
                             last_active_time: trader.last_active_time,
@@ -420,13 +420,13 @@
                         // 新增字段
                         dev: this.tokenName.dev,
                         last_trade_time: this.tokenName.last_trade_time,
-                        
+
                         // 新增的字段
                         sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)), // SOL余额，保留1位小数
                         last_active_time: new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                         start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
-                        end_holding_at: item.end_holding_at 
-                            ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) 
+                        end_holding_at: item.end_holding_at
+                            ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
                             : null,
                         holding_period: holdingPeriod
                     };
@@ -460,7 +460,7 @@
          */
         async importFromExcel(file) {
             if (!file) return;
-            
+
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
@@ -468,7 +468,7 @@
                     const workbook = XLSX.read(data, { type: 'array' });
                     const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                     const jsonData = XLSX.utils.sheet_to_json(worksheet);
-                    
+
                     // 显示导入进度
                     const progressBar = document.createElement('div');
                     progressBar.style.cssText = `
@@ -484,7 +484,7 @@
                     `;
                     progressBar.textContent = '正在导入数据...';
                     document.body.appendChild(progressBar);
-                    
+
                     let importedCount = 0;
                     for (const row of jsonData) {
                         const trader = {
@@ -506,16 +506,16 @@
                             profit_tag: parseInt(row['利润排名']),
                             update_time: row['更新时间']
                         };
-                        
+
                         await this.db.upsertTrader(trader);
                         importedCount++;
                         progressBar.textContent = `正在导入数据... (${importedCount}/${jsonData.length})`;
                     }
-                    
+
                     document.body.removeChild(progressBar);
                     this.loadAndDisplayData(); // 刷新显示
                     alert(`成功导入 ${importedCount} 条数据`);
-                    
+
                 } catch (error) {
                     console.error('导入失败:', error);
                     alert('导入失败: ' + error.message);
@@ -535,9 +535,9 @@
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                width: 90%;
-                max-width: 1200px;
-                max-height: 80%;
+                width: 95%;
+                max-width: 1800px;
+                max-height: 90%;
                 background: white;
                 border: 2px solid #4CAF50;
                 border-radius: 10px;
@@ -554,6 +554,47 @@
             title.style.cssText = 'margin-bottom: 15px; text-align: center; color: #4CAF50;';
             this.dataViewerModal.appendChild(title);
 
+            // 添加查询控件容器
+            const queryContainer = document.createElement('div');
+            queryContainer.style.cssText = 'display: flex; gap: 10px; margin-bottom: 15px; align-items: center;';
+
+            // 添加查询类型选择
+            const queryTypeSelect = document.createElement('select');
+            queryTypeSelect.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd;';
+            ['名称', '合约', '聪明钱', 'Dev'].forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                queryTypeSelect.appendChild(option);
+            });
+
+            // 添加查询输入框
+            const queryInput = document.createElement('input');
+            queryInput.type = 'text';
+            queryInput.placeholder = '请输入查询内容';
+            queryInput.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd; flex-grow: 1;';
+
+            // 添加查询按钮
+            const queryButton = document.createElement('button');
+            queryButton.textContent = '查询';
+            queryButton.style.cssText = 'background-color: #4CAF50; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer;';
+            queryButton.onclick = () => this.loadAndDisplayData(queryTypeSelect.value, queryInput.value);
+
+            // 添加重置按钮
+            const resetButton = document.createElement('button');
+            resetButton.textContent = '重置';
+            resetButton.style.cssText = 'background-color: #f44336; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer;';
+            resetButton.onclick = () => {
+                queryInput.value = '';
+                this.loadAndDisplayData();
+            };
+
+            queryContainer.appendChild(queryTypeSelect);
+            queryContainer.appendChild(queryInput);
+            queryContainer.appendChild(queryButton);
+            queryContainer.appendChild(resetButton);
+            this.dataViewerModal.appendChild(queryContainer);
+
             // 表格容器
             const tableContainer = document.createElement('div');
             tableContainer.style.cssText = 'overflow-x: auto; max-height: 600px; overflow-y: scroll;';
@@ -567,16 +608,16 @@
             const importButton = document.createElement('button');
             importButton.textContent = '导入Excel';
             importButton.style.cssText = 'background-color: #2196F3; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;';
-            
+
             // 隐藏的文件输入框
             const fileInput = document.createElement('input');
             fileInput.type = 'file';
             fileInput.accept = '.xlsx,.xls';
             fileInput.style.display = 'none';
             fileInput.onchange = (e) => this.importFromExcel(e.target.files[0]);
-            
+
             importButton.onclick = () => fileInput.click();
-            
+
             // 导出Excel按钮
             const exportButton = document.createElement('button');
             exportButton.textContent = '导出Excel';
@@ -630,33 +671,35 @@
 
         /**
          * 加载并显示数据库中的数据
+         * @param {string} queryType 查询类型
+         * @param {string} queryValue 查询值
          */
-        loadAndDisplayData() {
-            const tableContainer = this.dataViewerModal.children[1];
-            tableContainer.innerHTML = ''; // 清空之前的内容
+        loadAndDisplayData(queryType = '', queryValue = '') {
+            const tableContainer = this.dataViewerModal.children[2];
+            tableContainer.innerHTML = '';
 
             const table = document.createElement('table');
             table.style.cssText = 'width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px;';
 
             // 定义列宽配置
             const columnWidths = {
-                '名称': '80px',
+                '名称': '50px',
                 '合约': '200px',
-                '聪明钱': '300px',
-                'Dev': '300px',
-                'Pump内盘发射': '150px',
+                '聪明钱': '200px',
+                'Dev': '200px',
+                'Pump内盘发射': '120px',
                 'SOL余额': '80px',
-                '最后活跃时间': '150px',
-                '买入时间': '150px',
-                '卖出时间': '150px',
+                '最后活跃时间': '120px',
+                '买入时间': '120px',
+                '卖出时间': '120px',
                 '持有时长(分钟)': '100px',
-                '买入金额': '100px',
-                '卖出金额': '100px',
-                '到手利润': '100px',
-                'Twitter': '120px',
-                '用户名': '100px',
-                '排名': '60px',
-                '更新时间': '150px'
+                '买入金额': '80px',
+                '卖出金额': '80px',
+                '到手利润': '80px',
+                'Twitter': '50px',
+                '用户名': '50px',
+                '排名': '30px',
+                '更新时间': '120px'
             };
 
             // 创建表头
@@ -664,9 +707,9 @@
             thead.style.cssText = 'background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;';
             const headerRow = document.createElement('tr');
             const headers = [
-                '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射', 
+                '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', '持有时长(分钟)',
-                '买入金额', '卖出金额', '到手利润', 
+                '买入金额', '卖出金额', '到手利润',
                 'Twitter', '用户名', '排名', '更新时间'
             ];
 
@@ -687,10 +730,10 @@
                     overflow: hidden;
                     text-overflow: ellipsis;
                 `;
-                
+
                 // 添加排序点击事件
                 th.onclick = () => this.sortTableByColumn(table, index);
-                
+
                 // 添加拖拽调整宽度功能
                 const resizer = document.createElement('div');
                 resizer.style.cssText = `
@@ -704,7 +747,7 @@
                 `;
                 resizer.addEventListener('mousedown', (e) => this.initColumnResize(e, th));
                 th.appendChild(resizer);
-                
+
                 headerRow.appendChild(th);
             });
             thead.appendChild(headerRow);
@@ -720,28 +763,81 @@
             request.onsuccess = (event) => {
                 const traders = event.target.result;
 
+                // 根据查询条件过滤数据
+                let filteredTraders = traders;
+                if (queryType && queryValue) {
+                    const queryMap = {
+                        '名称': 'name',
+                        '合约': 'ca',
+                        '聪明钱': 'address',
+                        'Dev': 'dev'
+                    };
+                    const field = queryMap[queryType];
+                    filteredTraders = traders.filter(trader =>
+                        String(trader[field]).toLowerCase().includes(queryValue.toLowerCase())
+                    );
+                }
+
+                // 生成地址和Dev的颜色映射
+                const addressColors = new Map();
+                const devColors = new Map();
+                const usedColors = new Set();
+                const colors = [
+                    '#FFB6C1', '#98FB98', '#87CEFA', '#DDA0DD', '#F0E68C',
+                    '#E6E6FA', '#FFA07A', '#98FF98', '#B0E0E6', '#FFB6C1',
+                    '#FFDAB9', '#B0C4DE', '#F0FFF0', '#FFF0F5', '#F5F5DC'
+                ];
+
+                // 为重复的地址分配颜色
+                filteredTraders.forEach(trader => {
+                    if (trader.address && !addressColors.has(trader.address)) {
+                        const sameAddresses = filteredTraders.filter(t => t.address === trader.address);
+                        if (sameAddresses.length > 1) {
+                            let color;
+                            do {
+                                color = colors[Math.floor(Math.random() * colors.length)];
+                            } while (usedColors.has(color));
+                            usedColors.add(color);
+                            addressColors.set(trader.address, color);
+                        }
+                    }
+                });
+
+                // 为重复的Dev分配颜色
+                filteredTraders.forEach(trader => {
+                    if (trader.dev && !devColors.has(trader.dev)) {
+                        const sameDevs = filteredTraders.filter(t => t.dev === trader.dev);
+                        if (sameDevs.length > 1) {
+                            let color;
+                            do {
+                                color = colors[Math.floor(Math.random() * colors.length)];
+                            } while (usedColors.has(color));
+                            usedColors.add(color);
+                            devColors.set(trader.dev, color);
+                        }
+                    }
+                });
+
                 // 按照更新时间倒序、合约和profit_tag顺序排序
-                const sortedTraders = traders.sort((a, b) => {
-                    // 先按更新时间倒序
+                const sortedTraders = filteredTraders.sort((a, b) => {
                     const timeComparison = new Date(b.update_time) - new Date(a.update_time);
                     if (timeComparison !== 0) return timeComparison;
-
-                    // 再按合约顺序
                     const caComparison = a.ca.localeCompare(b.ca);
                     if (caComparison !== 0) return caComparison;
-
-                    // 最后按profit_tag顺序
                     return (a.profit_tag || 0) - (b.profit_tag || 0);
                 });
 
-                // 统计代币数量和记录数量
+                // 更新标题显示查询结果数量和代币数量
+                const title = this.dataViewerModal.children[0];
+                const totalCount = traders.length;
+                const filteredCount = sortedTraders.length;
                 const uniqueTokens = new Set(sortedTraders.map(trader => trader.name));
                 const tokenCount = uniqueTokens.size;
-                const recordCount = sortedTraders.length;
+                const totalUniqueTokens = new Set(traders.map(trader => trader.name)).size;
 
-                // 更新标题
-                const title = this.dataViewerModal.children[0];
-                title.textContent = `聪明钱数据库 (共${tokenCount}个代币，${recordCount}条记录)`;
+                title.textContent = queryValue ?
+                    `聪明钱数据库 (查询到 ${filteredCount} 条记录，${tokenCount}个代币，总计${totalCount}条记录，${totalUniqueTokens}个代币)` :
+                    `聪明钱数据库 (共${totalUniqueTokens}个代币，${totalCount}条记录)`;
 
                 // 创建表体
                 sortedTraders.forEach(trader => {
@@ -754,14 +850,14 @@
                         trader.address,
                         trader.dev || 'N/A',
                         trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
-                        
+
                         // 新增字段
                         this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
                         trader.last_active_time || 'N/A',
                         trader.start_holding_at || 'N/A',
                         trader.end_holding_at || 'N/A',
                         trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
-                        
+
                         this.formatNumberWithCommas(trader.buy_volume),
                         this.formatNumberWithCommas(trader.sell_volume),
                         this.formatNumberWithCommas(trader.realized_profit),
@@ -771,7 +867,7 @@
                         trader.update_time,
                     ];
 
-                    rowData.forEach(cellData => {
+                    rowData.forEach((cellData, index) => {
                         const td = document.createElement('td');
                         td.textContent = cellData;
                         td.style.cssText = `
@@ -782,7 +878,21 @@
                             overflow: hidden;
                             text-overflow: ellipsis;
                         `;
-                        // 添加悬停提示
+
+                        // 为地址和Dev添加背景色
+                        if (index === 2 && addressColors.has(cellData)) { // 聪明钱地址
+                            td.style.backgroundColor = addressColors.get(cellData);
+                        } else if (index === 3 && devColors.has(cellData)) { // Dev地址
+                            td.style.backgroundColor = devColors.get(cellData);
+                        }
+
+                        // 如果是查询的字段，添加高亮
+                        if (queryValue && queryType === headers[index] &&
+                            String(cellData).toLowerCase().includes(queryValue.toLowerCase())) {
+                            td.style.fontWeight = 'bold';
+                            td.style.color = '#1a73e8';
+                        }
+
                         td.title = cellData;
                         row.appendChild(td);
                     });
@@ -811,14 +921,14 @@
                     'Dev': trader.dev || 'N/A',
                     'Pump内盘发射': trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
                     '聪明钱': trader.address,
-                    
+
                     // 新增字段
                     'SOL余额': trader.sol_balance || 'N/A',
                     '最后活跃时间': trader.last_active_time || 'N/A',
                     '买入时间': trader.start_holding_at || 'N/A',
                     '卖出时间': trader.end_holding_at || 'N/A',
                     '持有时长(分钟)': trader.holding_period !== undefined ? trader.holding_period : 'N/A',
-                    
+
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
                     '到手利润': this.formatNumberWithCommas(trader.realized_profit),
@@ -882,17 +992,17 @@
         initColumnResize(e, th) {
             const startX = e.pageX;
             const startWidth = th.offsetWidth;
-            
+
             const mouseMoveHandler = (e) => {
                 const width = startWidth + (e.pageX - startX);
                 th.style.width = `${width}px`;
             };
-            
+
             const mouseUpHandler = () => {
                 document.removeEventListener('mousemove', mouseMoveHandler);
                 document.removeEventListener('mouseup', mouseUpHandler);
             };
-            
+
             document.addEventListener('mousemove', mouseMoveHandler);
             document.addEventListener('mouseup', mouseUpHandler);
         }
@@ -905,39 +1015,39 @@
             const rows = Array.from(tbody.querySelectorAll('tr'));
             const ths = table.querySelectorAll('th');
             const currentTh = ths[columnIndex];
-            
+
             // 切换排序方向
             const isAscending = currentTh.classList.contains('asc');
-            
+
             // 清除所有表头的排序标记
             ths.forEach(th => {
                 th.classList.remove('asc', 'desc');
                 th.style.backgroundColor = '#f2f2f2';
             });
-            
+
             // 设置当前列的排序标记
             currentTh.classList.add(isAscending ? 'desc' : 'asc');
             currentTh.style.backgroundColor = '#e0e0e0';
-            
+
             // 排序行
             rows.sort((rowA, rowB) => {
                 const cellA = rowA.cells[columnIndex].textContent;
                 const cellB = rowB.cells[columnIndex].textContent;
-                
+
                 // 检查是否为数字
                 const numA = parseFloat(cellA.replace(/,/g, ''));
                 const numB = parseFloat(cellB.replace(/,/g, ''));
-                
+
                 if (!isNaN(numA) && !isNaN(numB)) {
                     return isAscending ? numB - numA : numA - numB;
                 }
-                
+
                 // 如果不是数字，按字符串排序
-                return isAscending ? 
-                    cellB.localeCompare(cellA, 'zh-CN') : 
+                return isAscending ?
+                    cellB.localeCompare(cellA, 'zh-CN') :
                     cellA.localeCompare(cellB, 'zh-CN');
             });
-            
+
             // 重新插入排序后的行
             rows.forEach(row => tbody.appendChild(row));
         }
