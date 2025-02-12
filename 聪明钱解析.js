@@ -850,26 +850,43 @@
                         trader.address,
                         trader.dev || 'N/A',
                         trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
-
+                        
                         // 新增字段
                         this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
                         trader.last_active_time || 'N/A',
                         trader.start_holding_at || 'N/A',
                         trader.end_holding_at || 'N/A',
                         trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
-
+                        
                         this.formatNumberWithCommas(trader.buy_volume),
                         this.formatNumberWithCommas(trader.sell_volume),
                         this.formatNumberWithCommas(trader.realized_profit),
                         trader.twitter_username || 'N/A',
-                        trader.user_name || 'Unknown',
+                        trader.user_name || 'N/A',  // 将 Unknown 改为 N/A
                         trader.profit_tag || 'N/A',
                         trader.update_time,
                     ];
 
                     rowData.forEach((cellData, index) => {
                         const td = document.createElement('td');
-                        td.textContent = cellData;
+                        
+                        // 处理Twitter链接
+                        if (index === 13 && cellData !== 'N/A') {  // Twitter列
+                            const link = document.createElement('a');
+                            link.href = `https://x.com/${cellData}`;
+                            link.target = '_blank';
+                            link.textContent = cellData;
+                            link.style.cssText = `
+                                color: #1DA1F2;
+                                text-decoration: none;
+                            `;
+                            link.onmouseover = () => link.style.textDecoration = 'underline';
+                            link.onmouseout = () => link.style.textDecoration = 'none';
+                            td.appendChild(link);
+                        } else {
+                            td.textContent = cellData;
+                        }
+
                         td.style.cssText = `
                             border: 1px solid #ddd;
                             padding: 8px;
@@ -879,15 +896,33 @@
                             text-overflow: ellipsis;
                         `;
 
+                        // 处理利润高亮
+                        if (index === 12) {  // realized_profit列
+                            const profit = parseFloat(cellData.replace(/,/g, ''));
+                            if (profit >= 100000) {
+                                // 超过10万的更醒目显示
+                                td.style.cssText += `
+                                    color: #ff0000;
+                                    font-weight: bold;
+                                    background-color: #fff0f0;
+                                    font-size: 14px;
+                                    text-shadow: 0 0 1px rgba(255,0,0,0.3);
+                                `;
+                            } else if (profit >= 10000) {
+                                // 超过1万的红色显示
+                                td.style.color = '#ff0000';
+                            }
+                        }
+
                         // 为地址和Dev添加背景色
-                        if (index === 2 && addressColors.has(cellData)) { // 聪明钱地址
+                        if (index === 2 && addressColors.has(cellData)) {
                             td.style.backgroundColor = addressColors.get(cellData);
-                        } else if (index === 3 && devColors.has(cellData)) { // Dev地址
+                        } else if (index === 3 && devColors.has(cellData)) {
                             td.style.backgroundColor = devColors.get(cellData);
                         }
 
                         // 如果是查询的字段，添加高亮
-                        if (queryValue && queryType === headers[index] &&
+                        if (queryValue && queryType === headers[index] && 
                             String(cellData).toLowerCase().includes(queryValue.toLowerCase())) {
                             td.style.fontWeight = 'bold';
                             td.style.color = '#1a73e8';
