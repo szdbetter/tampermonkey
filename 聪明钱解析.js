@@ -437,6 +437,20 @@
         }
 
         /**
+         * 格式化数字为千位符显示
+         * @param {number} num 要格式化的数字
+         * @param {number} decimals 小数位数，默认为2
+         * @returns {string} 格式化后的字符串
+         */
+        formatNumberWithCommas(num, decimals = 0) {
+            if (num === null || num === undefined) return 'N/A';
+            return num.toLocaleString('zh-CN', {
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals
+            });
+        }
+
+        /**
          * 加载并显示数据库中的数据
          */
         loadAndDisplayData() {
@@ -479,9 +493,9 @@
                         trader.name,
                         trader.ca,
                         trader.address,
-                        trader.buy_volume.toFixed(4),
-                        trader.sell_volume.toFixed(4),
-                        trader.realized_profit.toFixed(4),
+                        this.formatNumberWithCommas(trader.buy_volume),
+                        this.formatNumberWithCommas(trader.sell_volume),
+                        this.formatNumberWithCommas(trader.realized_profit),
                         trader.twitter_username || 'N/A',
                         trader.user_name || 'Unknown',
                         trader.profit_tag || 'N/A',
@@ -517,9 +531,9 @@
                     '名称': trader.name,
                     '合约': trader.ca,
                     '钱包': trader.address,
-                    '买入金额': trader.buy_volume,
-                    '卖出金额': trader.sell_volume,
-                    '到手利润': trader.realized_profit,
+                    '买入金额': this.formatNumberWithCommas(trader.buy_volume),
+                    '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
+                    '到手利润': this.formatNumberWithCommas(trader.realized_profit),
                     'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'Unknown',
                     '利润排名': trader.profit_tag || 'N/A',
