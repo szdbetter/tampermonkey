@@ -636,7 +636,7 @@
             tableContainer.innerHTML = ''; // 清空之前的内容
 
             const table = document.createElement('table');
-            table.style.cssText = 'width: 100%; border-collapse: collapse; table-layout: fixed;';
+            table.style.cssText = 'width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px;';
 
             // 定义列宽配置
             const columnWidths = {
@@ -683,6 +683,9 @@
                     width: ${columnWidths[headerText]};
                     position: relative;
                     user-select: none;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
                 `;
                 
                 // 添加排序点击事件
@@ -771,7 +774,16 @@
                     rowData.forEach(cellData => {
                         const td = document.createElement('td');
                         td.textContent = cellData;
-                        td.style.cssText = 'border: 1px solid #ddd; padding: 8px;font-size: 12px;';
+                        td.style.cssText = `
+                            border: 1px solid #ddd;
+                            padding: 8px;
+                            font-size: 12px;
+                            white-space: nowrap;
+                            overflow: hidden;
+                            text-overflow: ellipsis;
+                        `;
+                        // 添加悬停提示
+                        td.title = cellData;
                         row.appendChild(td);
                     });
 
