@@ -146,6 +146,11 @@
                         store.createIndex('start_holding_at', 'start_holding_at', { unique: false });
                         store.createIndex('end_holding_at', 'end_holding_at', { unique: false });
                         store.createIndex('holding_period', 'holding_period', { unique: false });
+                        
+                        // 新增tag字段索引
+                        store.createIndex('tag_1', 'tag_1', { unique: false });
+                        store.createIndex('tag_2', 'tag_2', { unique: false });
+                        store.createIndex('tag_3', 'tag_3', { unique: false });
                     }
                 };
             });
@@ -406,7 +411,7 @@
                     const holdingPeriod = Math.round((endHoldingAt - startHoldingAt) / 60000); // 转换为分钟
 
                     const trader = {
-                        name: this.tokenName.symbol,
+                        token: this.tokenName.symbol,
                         ca: this.currentCA,
                         address: item.address,
                         buy_volume: Math.round(item.buy_volume_cur) || 0,
@@ -414,7 +419,13 @@
                         realized_profit: Math.round(item.realized_profit) || 0,
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
-                        profit_tag: index + 1, // 增加利润排名
+                        profit_tag: index + 1,
+                        
+                        // 新增tag字段，初始值为空字符串
+                        tag_1: '',
+                        tag_2: '',
+                        tag_3: '',
+                        
                         update_time: this.getBeijingTime(),
 
                         // 新增字段
@@ -422,7 +433,7 @@
                         last_trade_time: this.tokenName.last_trade_time,
 
                         // 新增的字段
-                        sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)), // SOL余额，保留1位小数
+                        sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
                         last_active_time: new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                         start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                         end_holding_at: item.end_holding_at
@@ -699,6 +710,9 @@
                 'Twitter': '50px',
                 '用户名': '50px',
                 '排名': '30px',
+                '标签1': '80px',
+                '标签2': '80px',
+                '标签3': '80px',
                 '更新时间': '120px'
             };
 
@@ -710,7 +724,7 @@
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', '持有时长(分钟)',
                 '买入金额', '卖出金额', '到手利润',
-                'Twitter', '用户名', '排名', '更新时间'
+                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
             headers.forEach((headerText, index) => {
@@ -831,9 +845,9 @@
                 const title = this.dataViewerModal.children[0];
                 const totalCount = traders.length;
                 const filteredCount = sortedTraders.length;
-                const uniqueTokens = new Set(sortedTraders.map(trader => trader.name));
+                const uniqueTokens = new Set(sortedTraders.map(trader => trader.token));
                 const tokenCount = uniqueTokens.size;
-                const totalUniqueTokens = new Set(traders.map(trader => trader.name)).size;
+                const totalUniqueTokens = new Set(traders.map(trader => trader.token)).size;
 
                 title.textContent = queryValue ?
                     `聪明钱数据库 (查询到 ${filteredCount} 条记录，${tokenCount}个代币，总计${totalCount}条记录，${totalUniqueTokens}个代币)` :
@@ -845,7 +859,7 @@
                     row.style.cssText = 'border-bottom: 1px solid #ddd;';
 
                     const rowData = [
-                        trader.name,
+                        trader.token,
                         trader.ca,
                         trader.address,
                         trader.dev || 'N/A',
@@ -862,8 +876,11 @@
                         this.formatNumberWithCommas(trader.sell_volume),
                         this.formatNumberWithCommas(trader.realized_profit),
                         trader.twitter_username || 'N/A',
-                        trader.user_name || 'N/A',  // 将 Unknown 改为 N/A
+                        trader.user_name || 'N/A',
                         trader.profit_tag || 'N/A',
+                        trader.tag_1 || '',
+                        trader.tag_2 || '',
+                        trader.tag_3 || '',
                         trader.update_time,
                     ];
 
@@ -951,7 +968,7 @@
             request.onsuccess = (event) => {
                 const traders = event.target.result;
                 const worksheet = XLSX.utils.json_to_sheet(traders.map(trader => ({
-                    '名称': trader.name,
+                    '名称': trader.token,
                     '合约': trader.ca,
                     'Dev': trader.dev || 'N/A',
                     'Pump内盘发射': trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
@@ -968,8 +985,11 @@
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
                     '到手利润': this.formatNumberWithCommas(trader.realized_profit),
                     'Twitter': trader.twitter_username || 'N/A',
-                    '用户名': trader.user_name || 'Unknown',
+                    '用户名': trader.user_name || 'N/A',
                     '利润排名': trader.profit_tag || 'N/A',
+                    '标签1': trader.tag_1 || '',
+                    '标签2': trader.tag_2 || '',
+                    '标签3': trader.tag_3 || '',
                     '更新时间': trader.update_time,
                 })));
 
