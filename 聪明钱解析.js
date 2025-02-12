@@ -16,7 +16,7 @@
     // 调试日志工具
     const DebugLogger = {
         logElement: null,
-        
+
         init() {
             this.logElement = document.createElement('div');
             this.logElement.style.cssText = `
@@ -40,10 +40,10 @@
         log(message, type = 'info') {
             const timestamp = new Date().toLocaleTimeString();
             const logMessage = `[${timestamp}] ${message}`;
-            
+
             const messageElement = document.createElement('div');
             messageElement.textContent = logMessage;
-            
+
             switch(type) {
                 case 'error':
                     messageElement.style.color = 'red';
@@ -79,33 +79,32 @@
         async init() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(this.dbName, 3);
-                
+
                 request.onerror = () => {
                     DebugLogger.log(`数据库初始化错误: ${request.error}`, 'error');
                     reject(request.error);
                 };
-                
+
                 request.onsuccess = () => {
                     this.db = request.result;
                     DebugLogger.log('数据库初始化成功');
                     resolve();
                 };
-                
+
                 request.onupgradeneeded = (event) => {
                     const db = event.target.result;
                     if (!db.objectStoreNames.contains(this.storeName)) {
-                        const store = db.createObjectStore(this.storeName, { 
-                            keyPath: ['ca', 'address'] 
+                        const store = db.createObjectStore(this.storeName, {
+                            keyPath: ['ca', 'address']
                         });
                         store.createIndex('ca', 'ca', { unique: false });
                         store.createIndex('address', 'address', { unique: false });
                         store.createIndex('create_time', 'create_time', { unique: false });
                         store.createIndex('ca_address', ['ca', 'address'], { unique: true });
-                        
+
                         // 新增索引
                         store.createIndex('twitter_username', 'twitter_username', { unique: false });
                         store.createIndex('user_name', 'user_name', { unique: false });
-                        store.createIndex('wallet_tag', 'wallet_tag', { unique: false });
                         store.createIndex('realized_profit', 'realized_profit', { unique: false });
                         store.createIndex('profit_tag', 'profit_tag', { unique: false });
                     }
@@ -117,15 +116,15 @@
             return new Promise((resolve, reject) => {
                 const transaction = this.db.transaction([this.storeName], 'readwrite');
                 const store = transaction.objectStore(this.storeName);
-                
+
                 const index = store.index('ca_address');
                 const query = IDBKeyRange.only([trader.ca, trader.address]);
-                
+
                 const request = index.get(query);
-                
+
                 request.onsuccess = (event) => {
                     const existingTrader = event.target.result;
-                    
+
                     if (existingTrader) {
                         const updatedTrader = {
                             ...existingTrader,
@@ -134,7 +133,6 @@
                             realized_profit: trader.realized_profit,
                             twitter_username: trader.twitter_username,
                             user_name: trader.user_name,
-                            wallet_tag: trader.wallet_tag,
                             profit_tag: trader.profit_tag,
                             create_time: trader.create_time
                         };
@@ -146,7 +144,7 @@
                     }
                     resolve();
                 };
-                
+
                 request.onerror = () => {
                     DebugLogger.log(`存储交易者失败: ${trader.address}`, 'error');
                     reject(request.error);
@@ -310,7 +308,7 @@
                 const topTraders = data.slice(0, 20);
 
                 DebugLogger.log(`解析到 ${data.length} 条交易数据，保留前 ${topTraders.length} 名`, 'info');
-                
+
                 // 打印前5条数据的详细信息
                 const previewData = topTraders.slice(0, 5).map((item, index) => ({
                     '排名': index + 1,
@@ -336,7 +334,6 @@
                         realized_profit: Math.round(item.realized_profit) || 0,
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
-                        wallet_tag: item.wallet_tag_v2 || '',
                         profit_tag: index + 1, // 增加利润排名
                         create_time: this.getBeijingTime()
                     };
@@ -391,7 +388,7 @@
 
             // 标题
             const title = document.createElement('h2');
-            title.textContent = '交易者数据库';
+            title.textContent = '聪明钱数据库';
             title.style.cssText = 'margin-bottom: 15px; text-align: center; color: #4CAF50;';
             this.dataViewerModal.appendChild(title);
 
@@ -453,8 +450,8 @@
             const thead = document.createElement('thead');
             thead.style.cssText = 'background-color: #f2f2f2;';
             const headerRow = document.createElement('tr');
-            const headers = ['代币名称', '合约地址', '交易者地址', '买入量', '卖出量', '实现利润', 'Twitter用户名', '用户名', '钱包标签', '创建时间'];
-            
+            const headers = ['名称', '合约', '聪明钱', '买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '创建时间'];
+
             headers.forEach(headerText => {
                 const th = document.createElement('th');
                 th.textContent = headerText;
@@ -466,7 +463,7 @@
 
             // 创建表体
             const tbody = document.createElement('tbody');
-            
+
             // 打开数据库并读取数据
             const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
             const store = transaction.objectStore(this.db.storeName);
@@ -477,7 +474,7 @@
                 traders.forEach(trader => {
                     const row = document.createElement('tr');
                     row.style.cssText = 'border-bottom: 1px solid #ddd;';
-                    
+
                     const rowData = [
                         trader.name,
                         trader.ca,
@@ -487,7 +484,7 @@
                         trader.realized_profit.toFixed(4),
                         trader.twitter_username || 'N/A',
                         trader.user_name || 'Unknown',
-                        trader.wallet_tag || 'N/A',
+                        trader.profit_tag || 'N/A',
                         trader.create_time
                     ];
 
@@ -517,20 +514,20 @@
             request.onsuccess = (event) => {
                 const traders = event.target.result;
                 const worksheet = XLSX.utils.json_to_sheet(traders.map(trader => ({
-                    '代币名称': trader.name,
-                    '合约地址': trader.ca,
-                    '交易者地址': trader.address,
-                    '买入量': trader.buy_volume,
-                    '卖出量': trader.sell_volume,
-                    '实现利润': trader.realized_profit,
-                    'Twitter用户名': trader.twitter_username || 'N/A',
+                    '名称': trader.name,
+                    '合约': trader.ca,
+                    '钱包': trader.address,
+                    '买入金额': trader.buy_volume,
+                    '卖出金额': trader.sell_volume,
+                    '到手利润': trader.realized_profit,
+                    'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'Unknown',
-                    '钱包标签': trader.wallet_tag || 'N/A',
+                    '利润排名': trader.profit_tag || 'N/A',
                     '创建时间': trader.create_time
                 })));
 
                 const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, '交易者数据');
+                XLSX.utils.book_append_sheet(workbook, worksheet, '聪明钱数据库');
                 XLSX.writeFile(workbook, `traders_data_${new Date().toISOString().split('T')[0]}.xlsx`);
             };
         }
@@ -559,10 +556,10 @@
             collectButton.onclick = () => this.parsePageData();
 
             const debugButton = document.createElement('button');
-            debugButton.textContent = '切换调试日志';
+            debugButton.textContent = '显示/隐藏日志';
             debugButton.style.marginBottom = '5px';
             debugButton.onclick = () => {
-                DebugLogger.logElement.style.display = 
+                DebugLogger.logElement.style.display =
                     DebugLogger.logElement.style.display === 'none' ? 'block' : 'none';
             };
 
@@ -581,7 +578,7 @@
     async function main() {
         try {
             DebugLogger.init();
-            
+
             const db = new SmartMoneyDatabase();
             await db.init();
 
