@@ -139,6 +139,13 @@
                         // 新增的索引
                         store.createIndex('dev', 'dev', { unique: false });
                         store.createIndex('last_trade_time', 'last_trade_time', { unique: false });
+
+                        // 新增字段索引
+                        store.createIndex('sol_balance', 'sol_balance', { unique: false });
+                        store.createIndex('last_active_time', 'last_active_time', { unique: false });
+                        store.createIndex('start_holding_at', 'start_holding_at', { unique: false });
+                        store.createIndex('end_holding_at', 'end_holding_at', { unique: false });
+                        store.createIndex('holding_period', 'holding_period', { unique: false });
                     }
                 };
             });
@@ -170,7 +177,14 @@
 
                             // 新增字段
                             dev: trader.dev,
-                            last_trade_time: trader.last_trade_time
+                            last_trade_time: trader.last_trade_time,
+
+                            // 新增的字段
+                            sol_balance: trader.sol_balance,
+                            last_active_time: trader.last_active_time,
+                            start_holding_at: trader.start_holding_at,
+                            end_holding_at: trader.end_holding_at,
+                            holding_period: trader.holding_period
                         };
                         store.put(updatedTrader);
                         DebugLogger.log(`更新聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
@@ -386,6 +400,11 @@
 
                 const processedTraders = [];
                 for (const [index, item] of topTraders.entries()) {
+                    // 计算持有时间
+                    const startHoldingAt = item.start_holding_at * 1000;
+                    const endHoldingAt = item.end_holding_at ? item.end_holding_at * 1000 : Date.now();
+                    const holdingPeriod = Math.round((endHoldingAt - startHoldingAt) / 60000); // 转换为分钟
+
                     const trader = {
                         name: this.tokenName.symbol,
                         ca: this.currentCA,
@@ -400,7 +419,16 @@
 
                         // 新增字段
                         dev: this.tokenName.dev,
-                        last_trade_time: this.tokenName.last_trade_time
+                        last_trade_time: this.tokenName.last_trade_time,
+
+                        // 新增的字段
+                        sol_balance: Number((item.sol_balance / Math.pow(10, 9)).toFixed(1)), // SOL余额，保留1位小数
+                        last_active_time: new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+                        start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+                        end_holding_at: item.end_holding_at
+                            ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+                            : null,
+                        holding_period: holdingPeriod
                     };
 
                     await this.db.upsertTrader(trader);
@@ -560,12 +588,17 @@
                 const thead = document.createElement('thead');
                 thead.style.cssText = 'background-color: #f2f2f2;';
                 const headerRow = document.createElement('tr');
-                const headers = ['名称', '合约', '聪明钱',  'Dev',  'Pump最后交易时间','买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '更新时间'];
+                const headers = [
+                    '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
+                    'SOL余额', '最后活跃时间', '买入时间', '卖出时间', '时长(m)',
+                    '买入金额', '卖出金额', '到手利润',
+                    'Twitter', '用户名', '排名', '更新时间'
+                ];
 
                 headers.forEach(headerText => {
                     const th = document.createElement('th');
                     th.textContent = headerText;
-                    th.style.cssText = 'border: 1px solid #ddd; padding: 8px; text-align: left;';
+                    th.style.cssText = 'border: 1px solid #ddd; padding: 8px; text-align: left;font-size: 14px;';
                     headerRow.appendChild(th);
                 });
                 thead.appendChild(headerRow);
@@ -584,6 +617,14 @@
                         trader.address,
                         trader.dev || 'N/A',
                         trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
+
+                        // 新增字段
+                        this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
+                        trader.last_active_time || 'N/A',
+                        trader.start_holding_at || 'N/A',
+                        trader.end_holding_at || 'N/A',
+                        trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
+
                         this.formatNumberWithCommas(trader.buy_volume),
                         this.formatNumberWithCommas(trader.sell_volume),
                         this.formatNumberWithCommas(trader.realized_profit),
@@ -591,13 +632,12 @@
                         trader.user_name || 'Unknown',
                         trader.profit_tag || 'N/A',
                         trader.update_time,
-
                     ];
 
                     rowData.forEach(cellData => {
                         const td = document.createElement('td');
                         td.textContent = cellData;
-                        td.style.cssText = 'border: 1px solid #ddd; padding: 8px;';
+                        td.style.cssText = 'border: 1px solid #ddd; padding: 8px;font-size: 12px;';
                         row.appendChild(td);
                     });
 
@@ -623,8 +663,16 @@
                     '名称': trader.name,
                     '合约': trader.ca,
                     'Dev': trader.dev || 'N/A',
-                    'Pump最后交易时间': trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
+                    'Pump内盘发射': trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
                     '聪明钱': trader.address,
+
+                    // 新增字段
+                    'SOL余额': trader.sol_balance || 'N/A',
+                    '最后活跃时间': trader.last_active_time || 'N/A',
+                    '买入时间': trader.start_holding_at || 'N/A',
+                    '卖出时间': trader.end_holding_at || 'N/A',
+                    '时长(m)': trader.holding_period !== undefined ? trader.holding_period : 'N/A',
+
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
                     '到手利润': this.formatNumberWithCommas(trader.realized_profit),
@@ -632,7 +680,6 @@
                     '用户名': trader.user_name || 'Unknown',
                     '利润排名': trader.profit_tag || 'N/A',
                     '更新时间': trader.update_time,
-
                 })));
 
                 const workbook = XLSX.utils.book_new();
