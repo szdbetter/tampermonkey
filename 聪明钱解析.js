@@ -107,6 +107,7 @@
                         store.createIndex('user_name', 'user_name', { unique: false });
                         store.createIndex('wallet_tag', 'wallet_tag', { unique: false });
                         store.createIndex('realized_profit', 'realized_profit', { unique: false });
+                        store.createIndex('profit_tag', 'profit_tag', { unique: false });
                     }
                 };
             });
@@ -134,13 +135,14 @@
                             twitter_username: trader.twitter_username,
                             user_name: trader.user_name,
                             wallet_tag: trader.wallet_tag,
+                            profit_tag: trader.profit_tag,
                             create_time: trader.create_time
                         };
                         store.put(updatedTrader);
-                        DebugLogger.log(`更新交易者: ${trader.address} (${trader.user_name || 'Unknown'})`, 'info');
+                        DebugLogger.log(`更新交易者: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, 'info');
                     } else {
                         store.put(trader);
-                        DebugLogger.log(`新增交易者: ${trader.address} (${trader.user_name || 'Unknown'})`, 'info');
+                        DebugLogger.log(`新增交易者: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, 'info');
                     }
                     resolve();
                 };
@@ -301,14 +303,21 @@
                     return;
                 }
 
-                DebugLogger.log(`解析到 ${data.length} 条交易数据`);
+                // 按照realized_profit降序排序
+                data.sort((a, b) => (b.realized_profit || 0) - (a.realized_profit || 0));
+
+                // 只保留前20名
+                const topTraders = data.slice(0, 20);
+
+                DebugLogger.log(`解析到 ${data.length} 条交易数据，保留前 ${topTraders.length} 名`, 'info');
                 
                 // 打印前5条数据的详细信息
-                const previewData = data.slice(0, 5).map(item => ({
+                const previewData = topTraders.slice(0, 5).map((item, index) => ({
+                    '排名': index + 1,
                     'Address': item.address,
-                    '买入量': item.buy_volume_cur,
-                    '卖出量': item.sell_volume_cur,
-                    '实现利润': item.realized_profit,
+                    '买入量': Math.round(item.buy_volume_cur || 0),
+                    '卖出量': Math.round(item.sell_volume_cur || 0),
+                    '实现利润': Math.round(item.realized_profit || 0),
                     '用户名': item.name || 'Unknown',
                     'Twitter用户名': item.twitter_username || 'N/A'
                 }));
@@ -317,29 +326,30 @@
                 this.updateProgressBar(70);
 
                 const processedTraders = [];
-                for (const [index, item] of data.entries()) {
+                for (const [index, item] of topTraders.entries()) {
                     const trader = {
                         name: this.tokenName,
                         ca: this.currentCA,
                         address: item.address,
-                        buy_volume: parseFloat(item.buy_volume_cur) || 0,
-                        sell_volume: parseFloat(item.sell_volume_cur) || 0,
-                        realized_profit: parseFloat(item.realized_profit) || 0,
+                        buy_volume: Math.round(item.buy_volume_cur) || 0,
+                        sell_volume: Math.round(item.sell_volume_cur) || 0,
+                        realized_profit: Math.round(item.realized_profit) || 0,
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
                         wallet_tag: item.wallet_tag_v2 || '',
+                        profit_tag: index + 1, // 增加利润排名
                         create_time: this.getBeijingTime()
                     };
 
                     await this.db.upsertTrader(trader);
                     processedTraders.push(trader);
-                    this.updateProgressBar(70 + (index + 1) / data.length * 30);
+                    this.updateProgressBar(70 + (index + 1) / topTraders.length * 30);
                 }
 
                 // 打印处理的交易者数据
                 DebugLogger.logTable(processedTraders, '处理的交易者数据');
 
-                DebugLogger.log('数据更新成功');
+                DebugLogger.log('数据更新成功', 'info');
                 this.updateProgressBar(100);
                 setTimeout(() => {
                     if (this.progressBar) {
