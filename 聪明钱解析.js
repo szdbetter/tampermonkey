@@ -13,6 +13,34 @@
 (function() {
     'use strict';
 
+    // 全局配置常量
+    const CONFIG = {
+        // 最低实现利润阈值（美元）
+        MIN_REALIZED_PROFIT: 5000,
+
+        // 最大保留交易者数量
+        MAX_TRADERS: 20,
+
+        // 调试日志级别
+        DEBUG_LEVEL: {
+            INFO: 'info',
+            WARNING: 'warning',
+            ERROR: 'error'
+        },
+
+        // 外部API配置
+        API: {
+            TOKEN_SEARCH_URL: 'https://frontend-api-v3.pump.fun/coins/search',
+            SEARCH_PARAMS: {
+                offset: 0,
+                limit: 50,
+                sort: 'market_cap',
+                includeNsfw: false,
+                order: 'DESC'
+            }
+        }
+    };
+
     // 调试日志工具
     const DebugLogger = {
         logElement: null,
@@ -81,7 +109,7 @@
                 const request = indexedDB.open(this.dbName, 3);
 
                 request.onerror = () => {
-                    DebugLogger.log(`数据库初始化错误: ${request.error}`, 'error');
+                    DebugLogger.log(`数据库初始化错误: ${request.error}`, CONFIG.DEBUG_LEVEL.ERROR);
                     reject(request.error);
                 };
 
@@ -99,7 +127,7 @@
                         });
                         store.createIndex('ca', 'ca', { unique: false });
                         store.createIndex('address', 'address', { unique: false });
-                        store.createIndex('create_time', 'create_time', { unique: false });
+                        store.createIndex('update_time', 'update_time', { unique: false });
                         store.createIndex('ca_address', ['ca', 'address'], { unique: true });
 
                         // 新增索引
@@ -107,6 +135,11 @@
                         store.createIndex('user_name', 'user_name', { unique: false });
                         store.createIndex('realized_profit', 'realized_profit', { unique: false });
                         store.createIndex('profit_tag', 'profit_tag', { unique: false });
+                        
+                        // 新增的索引
+                        store.createIndex('dev', 'dev', { unique: false });
+                        store.createIndex('create_time', 'create_time', { unique: false });
+                        store.createIndex('last_trade_time', 'last_trade_time', { unique: false });
                     }
                 };
             });
@@ -134,19 +167,24 @@
                             twitter_username: trader.twitter_username,
                             user_name: trader.user_name,
                             profit_tag: trader.profit_tag,
-                            create_time: trader.create_time
+                            update_time: trader.update_time,
+                            
+                            // 新增字段
+                            dev: trader.dev,
+                            create_time: trader.create_time,
+                            last_trade_time: trader.last_trade_time
                         };
                         store.put(updatedTrader);
-                        DebugLogger.log(`更新交易者: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, 'info');
+                        DebugLogger.log(`更新聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
                     } else {
                         store.put(trader);
-                        DebugLogger.log(`新增交易者: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, 'info');
+                        DebugLogger.log(`新增聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
                     }
                     resolve();
                 };
 
                 request.onerror = () => {
-                    DebugLogger.log(`存储交易者失败: ${trader.address}`, 'error');
+                    DebugLogger.log(`存储聪明钱失败: ${trader.address}`, CONFIG.DEBUG_LEVEL.ERROR);
                     reject(request.error);
                 };
             });
@@ -207,37 +245,62 @@
                     DebugLogger.log(`正在获取代币名称: ${ca}`);
                     GM_xmlhttpRequest({
                         method: 'GET',
-                        url: `https://frontend-api-v3.pump.fun/coins/search?offset=0&limit=50&sort=market_cap&includeNsfw=false&order=DESC&searchTerm=${ca}&type=exact`,
+                        url: `${CONFIG.API.TOKEN_SEARCH_URL}?offset=${CONFIG.API.SEARCH_PARAMS.offset}&limit=${CONFIG.API.SEARCH_PARAMS.limit}&sort=${CONFIG.API.SEARCH_PARAMS.sort}&includeNsfw=${CONFIG.API.SEARCH_PARAMS.includeNsfw}&order=${CONFIG.API.SEARCH_PARAMS.order}&searchTerm=${ca}&type=exact`,
                         onload: (response) => {
                             try {
                                 const data = JSON.parse(response.responseText);
                                 if (data && data.length > 0) {
                                     const tokenInfo = data[0];
-                                    DebugLogger.log(`获取代币信息成功: ${JSON.stringify(tokenInfo)}`, 'info');
+                                    DebugLogger.log(`获取代币信息成功: ${JSON.stringify(tokenInfo)}`, CONFIG.DEBUG_LEVEL.INFO);
                                     DebugLogger.logTable([{
-                                        'CA': tokenInfo.ca,
+                                        'CA': tokenInfo.mint,
                                         'Symbol': tokenInfo.symbol,
-                                        'Name': tokenInfo.name
+                                        'Name': tokenInfo.name,
+                                        'Dev': tokenInfo.creator,
+                                        '创建时间': new Date(tokenInfo.created_timestamp).toLocaleString(),
+                                        '最后交易时间': new Date(tokenInfo.last_trade_timestamp).toLocaleString()
                                     }], '代币详细信息');
-                                    resolve(tokenInfo.symbol || 'Unknown Token');
+                                    
+                                    // 返回一个包含更多信息的对象
+                                    resolve({
+                                        symbol: tokenInfo.symbol || 'Unknown Token',
+                                        dev: tokenInfo.creator,
+                                        create_time: tokenInfo.created_timestamp,
+                                        last_trade_time: tokenInfo.last_trade_timestamp
+                                    });
                                 } else {
-                                    DebugLogger.log('未找到代币名称', 'warning');
-                                    resolve('Unknown Token');
+                                    DebugLogger.log('未找到代币名称', CONFIG.DEBUG_LEVEL.WARNING);
+                                    resolve({
+                                        symbol: 'Unknown Token',
+                                        dev: '',
+                                        create_time: null,
+                                        last_trade_time: null
+                                    });
                                 }
                             } catch (error) {
-                                DebugLogger.log(`解析代币名称失败: ${error}`, 'error');
-                                resolve('Unknown Token');
+                                DebugLogger.log(`解析代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                resolve({
+                                    symbol: 'Unknown Token',
+                                    dev: '',
+                                    create_time: null,
+                                    last_trade_time: null
+                                });
                             }
                         },
                         onerror: (error) => {
-                            DebugLogger.log(`获取代币名称失败: ${error}`, 'error');
+                            DebugLogger.log(`获取代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                             reject(error);
                         }
                     });
                 });
             } catch (error) {
-                DebugLogger.log(`获取代币名称请求失败: ${error}`, 'error');
-                return 'Unknown Token';
+                DebugLogger.log(`获取代币名称请求失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                return {
+                    symbol: 'Unknown Token',
+                    dev: '',
+                    create_time: null,
+                    last_trade_time: null
+                };
             }
         }
 
@@ -249,7 +312,7 @@
 
                 this.currentCA = this.extractCAFromUrl();
                 if (!this.currentCA) {
-                    DebugLogger.log('未找到合约地址', 'error');
+                    DebugLogger.log('未找到合约地址', CONFIG.DEBUG_LEVEL.ERROR);
                     return;
                 }
 
@@ -265,7 +328,7 @@
                             return jsonData.data;
                         }
                     } catch (parseError) {
-                        DebugLogger.log(`JSON解析失败: ${parseError}`, 'error');
+                        DebugLogger.log(`JSON解析失败: ${parseError}`, CONFIG.DEBUG_LEVEL.ERROR);
                     }
                     return null;
                 };
@@ -297,17 +360,22 @@
                 }
 
                 if (!data) {
-                    DebugLogger.log('未找到有效的JSON数据', 'error');
+                    DebugLogger.log('未找到有效的JSON数据', CONFIG.DEBUG_LEVEL.ERROR);
                     return;
                 }
 
+                // 过滤掉低于最低利润阈值的交易者
+                const filteredData = data.filter(item =>
+                    (item.realized_profit || 0) >= CONFIG.MIN_REALIZED_PROFIT
+                );
+
                 // 按照realized_profit降序排序
-                data.sort((a, b) => (b.realized_profit || 0) - (a.realized_profit || 0));
+                filteredData.sort((a, b) => (b.realized_profit || 0) - (a.realized_profit || 0));
 
-                // 只保留前20名
-                const topTraders = data.slice(0, 20);
+                // 只保留前20名（或更少）
+                const topTraders = filteredData.slice(0, CONFIG.MAX_TRADERS);
 
-                DebugLogger.log(`解析到 ${data.length} 条交易数据，保留前 ${topTraders.length} 名`, 'info');
+                DebugLogger.log(`解析到 ${data.length} 条交易数据，过滤后 ${filteredData.length} 条，保留前 ${topTraders.length} 名`, CONFIG.DEBUG_LEVEL.INFO);
 
                 // 打印前5条数据的详细信息
                 const previewData = topTraders.slice(0, 5).map((item, index) => ({
@@ -326,7 +394,7 @@
                 const processedTraders = [];
                 for (const [index, item] of topTraders.entries()) {
                     const trader = {
-                        name: this.tokenName,
+                        name: this.tokenName.symbol,
                         ca: this.currentCA,
                         address: item.address,
                         buy_volume: Math.round(item.buy_volume_cur) || 0,
@@ -335,7 +403,12 @@
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
                         profit_tag: index + 1, // 增加利润排名
-                        create_time: this.getBeijingTime()
+                        update_time: this.getBeijingTime(),
+                        
+                        // 新增字段
+                        dev: this.tokenName.dev,
+                        create_time: this.tokenName.create_time,
+                        last_trade_time: this.tokenName.last_trade_time
                     };
 
                     await this.db.upsertTrader(trader);
@@ -346,7 +419,7 @@
                 // 打印处理的交易者数据
                 DebugLogger.logTable(processedTraders, '处理的交易者数据');
 
-                DebugLogger.log('数据更新成功', 'info');
+                DebugLogger.log('数据更新成功', CONFIG.DEBUG_LEVEL.INFO);
                 this.updateProgressBar(100);
                 setTimeout(() => {
                     if (this.progressBar) {
@@ -355,7 +428,7 @@
                 }, 2000);
 
             } catch (error) {
-                DebugLogger.log(`处理数据失败: ${error}`, 'error');
+                DebugLogger.log(`处理数据失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                 if (this.progressBar) {
                     this.progressBar.remove();
                 }
@@ -468,10 +541,10 @@
             request.onsuccess = (event) => {
                 const traders = event.target.result;
 
-                // 按照创建时间倒序、合约和profit_tag顺序排序
+                // 按照更新时间倒序、合约和profit_tag顺序排序
                 const sortedTraders = traders.sort((a, b) => {
-                    // 先按创建时间倒序
-                    const timeComparison = new Date(b.create_time) - new Date(a.create_time);
+                    // 先按更新时间倒序
+                    const timeComparison = new Date(b.update_time) - new Date(a.update_time);
                     if (timeComparison !== 0) return timeComparison;
 
                     // 再按合约顺序
@@ -495,7 +568,7 @@
                 const thead = document.createElement('thead');
                 thead.style.cssText = 'background-color: #f2f2f2;';
                 const headerRow = document.createElement('tr');
-                const headers = ['名称', '合约', '聪明钱', '买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '创建时间'];
+                const headers = ['名称', '合约', '聪明钱', '买入金额', '卖出金额', '到手利润', 'Twitter', '用户名', '排名', '更新时间'];
 
                 headers.forEach(headerText => {
                     const th = document.createElement('th');
@@ -523,7 +596,7 @@
                         trader.twitter_username || 'N/A',
                         trader.user_name || 'Unknown',
                         trader.profit_tag || 'N/A',
-                        trader.create_time
+                        trader.update_time
                     ];
 
                     rowData.forEach(cellData => {
@@ -561,7 +634,7 @@
                     'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'Unknown',
                     '利润排名': trader.profit_tag || 'N/A',
-                    '创建时间': trader.create_time
+                    '更新时间': trader.update_time
                 })));
 
                 const workbook = XLSX.utils.book_new();
@@ -639,7 +712,7 @@
             collector.parsePageData();
 
         } catch (error) {
-            DebugLogger.log(`初始化失败: ${error}`, 'error');
+            DebugLogger.log(`初始化失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
         }
     }
 
