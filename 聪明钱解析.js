@@ -1192,6 +1192,25 @@
                                                         }
                                                         break;
 
+                                                    case 3: // Dev列
+                                                        {
+                                                            // 获取所有相同CA的记录
+                                                            const caIndex = store.index('ca');
+                                                            const caRequest = caIndex.getAll(IDBKeyRange.only(currentTrader.ca));
+                                                            
+                                                            caRequest.onsuccess = async () => {
+                                                                const tradersWithSameCA = caRequest.result;
+                                                                for (const trader of tradersWithSameCA) {
+                                                                    trader.dev = newValue;
+                                                                    await store.put(trader);
+                                                                }
+                                                                DebugLogger.log(`批量更新Dev成功: ${tradersWithSameCA.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+                                                                // 刷新表格显示
+                                                                this.loadAndDisplayData();
+                                                            };
+                                                        }
+                                                        break;
+
                                                     case 17: // tag_1
                                                     case 18: // tag_2
                                                     case 19: // tag_3
