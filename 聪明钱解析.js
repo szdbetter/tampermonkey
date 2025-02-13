@@ -1419,6 +1419,31 @@
             collectButton.style.marginBottom = '5px';
             collectButton.onclick = () => this.parsePageData();
 
+            // 新增批量采集按钮
+            const batchCollectButton = document.createElement('button');
+            batchCollectButton.textContent = '批量采集';
+            batchCollectButton.style.cssText = `
+                margin-bottom: 5px;
+                background-color: #FF4081;
+                color: white;
+                border: none;
+                padding: 8px 15px;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+                transition: all 0.3s ease;
+            `;
+            batchCollectButton.onmouseover = () => {
+                batchCollectButton.style.backgroundColor = '#F50057';
+                batchCollectButton.style.transform = 'translateY(-2px)';
+            };
+            batchCollectButton.onmouseout = () => {
+                batchCollectButton.style.backgroundColor = '#FF4081';
+                batchCollectButton.style.transform = 'translateY(0)';
+            };
+            batchCollectButton.onclick = () => this.showBatchCollectWindow();
+
             const debugButton = document.createElement('button');
             debugButton.textContent = '显示/隐藏日志';
             debugButton.style.marginBottom = '5px';
@@ -1427,12 +1452,10 @@
                     DebugLogger.logElement.style.display === 'none' ? 'block' : 'none';
             };
 
-            // 新增数据查看按钮
             const viewDataButton = document.createElement('button');
             viewDataButton.textContent = '查看数据库';
             viewDataButton.onclick = () => this.toggleDataViewer();
 
-            // 添加数据源测试按钮
             const testDataSourceButton = document.createElement('button');
             testDataSourceButton.textContent = '数据源测试';
             testDataSourceButton.style.cssText = 'background-color: #9c27b0; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; margin-top: 5px;';
@@ -1441,9 +1464,10 @@
             };
 
             container.appendChild(collectButton);
+            container.appendChild(batchCollectButton);
             container.appendChild(debugButton);
             container.appendChild(viewDataButton);
-            container.appendChild(testDataSourceButton);  // 添加到主界面
+            container.appendChild(testDataSourceButton);
             document.body.appendChild(container);
         }
 
@@ -1673,6 +1697,430 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             testWindow.appendChild(resultArea);
 
             return testWindow;
+        }
+
+        // 获取数据库统计信息
+        async getDBStats() {
+            return new Promise((resolve, reject) => {
+                const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
+                const store = transaction.objectStore(this.db.storeName);
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const records = request.result;
+                    const uniqueCAs = new Set(records.map(r => r.ca));
+                    resolve({
+                        caCount: uniqueCAs.size,
+                        recordCount: records.length
+                    });
+                };
+
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // 处理单个CA的数据
+        async processTraderData(ca, data) {
+            let inserted = 0;
+            let updated = 0;
+
+            // 过滤和处理数据的逻辑
+            const filteredData = data.filter(item =>
+                (item.realized_profit || 0) >= CONFIG.MIN_REALIZED_PROFIT
+            ).sort((a, b) => (b.realized_profit || 0) - (a.realized_profit || 0))
+             .slice(0, CONFIG.MAX_TRADERS);
+
+            const tokenInfo = await this.fetchTokenName(ca);
+            
+            for (let i = 0; i < filteredData.length; i++) {
+                const item = filteredData[i];
+                // 计算持有时间
+                const startHoldingAtTimestamp = item.start_holding_at * 1000; // 转换为毫秒
+                let holdingPeriod = null;
+                if (item.end_holding_at === null) {
+                    // 如果没有卖出过，用当前时间计算
+                    holdingPeriod = Math.round((Date.now() - startHoldingAtTimestamp) / 60000); // 转换为分钟
+                } else {
+                    // 如果有卖出时间，使用卖出时间计算
+                    const endHoldingAt = item.end_holding_at * 1000;
+                    holdingPeriod = Math.round((endHoldingAt - startHoldingAtTimestamp) / 60000); // 转换为分钟
+                }
+
+                // 计算 buy_after_launch_interval
+                const createTime = tokenInfo.created_timestamp;
+                const launchTime = tokenInfo.launch_time;
+                let buyAfterLaunchInterval = null;
+
+                if (startHoldingAtTimestamp && createTime) {
+                    if (launchTime && startHoldingAtTimestamp > launchTime) {
+                        buyAfterLaunchInterval = Math.round((startHoldingAtTimestamp - launchTime) / 1000); // 转换为秒
+                    } else {
+                        buyAfterLaunchInterval = Math.round((startHoldingAtTimestamp - createTime) / 1000); // 转换为秒
+                    }
+                }
+
+                const trader = {
+                    token: tokenInfo.symbol,
+                    ca: ca,
+                    address: item.address,
+                    buy_volume: Math.round(item.buy_volume_cur) || 0,
+                    sell_volume: Math.round(item.sell_volume_cur) || 0,
+                    realized_profit: Math.round(item.realized_profit) || 0,
+                    twitter_username: item.twitter_username || '',
+                    user_name: item.name || '',
+                    profit_tag: i + 1, // 使用循环的索引i代替之前未定义的index
+                    tag_1: '',
+                    tag_2: '',
+                    tag_3: '',
+                    update_time: this.getBeijingTime(),
+                    dev: tokenInfo.dev,
+                    create_time: tokenInfo.created_timestamp,
+                    launch_time: tokenInfo.launch_time ? new Date(tokenInfo.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
+                    sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
+                    last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
+                    start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+                    end_holding_at: item.end_holding_at
+                        ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+                        : null,
+                    holding_period: holdingPeriod,
+                    buy_after_launch_interval: buyAfterLaunchInterval
+                };
+
+                // 检查是否存在
+                const exists = await this.checkTraderExists(ca, item.address);
+                if (exists) {
+                    updated++;
+                } else {
+                    inserted++;
+                }
+                await this.db.upsertTrader(trader);
+                DebugLogger.log(`处理记录: ${exists ? '更新' : '新增'} CA=${ca}, Address=${item.address}`, CONFIG.DEBUG_LEVEL.INFO);
+            }
+
+            return { inserted, updated };
+        }
+
+        // 检查交易者是否存在
+        async checkTraderExists(ca, address) {
+            return new Promise((resolve) => {
+                const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
+                const store = transaction.objectStore(this.db.storeName);
+                const index = store.index('ca_address');
+                const request = index.get(IDBKeyRange.only([ca, address]));
+
+                request.onsuccess = () => resolve(!!request.result);
+                request.onerror = () => resolve(false);
+            });
+        }
+
+        // 采集单个CA的数据
+        async collectSingleCA(ca) {
+            return new Promise((resolve, reject) => {
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: `https://gmgn.ai/defi/quotation/v1/tokens/top_traders/sol/${ca}?orderby=profit&direction=desc`,
+                    headers: {
+                        'Accept': 'application/json',
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                        'Origin': 'https://gmgn.ai',
+                        'Referer': 'https://gmgn.ai/'
+                    },
+                    onload: async (response) => {
+                        try {
+                            const responseData = JSON.parse(response.responseText);
+                            if (responseData.code !== 0 || !Array.isArray(responseData.data)) {
+                                reject(new Error('API返回数据格式错误'));
+                                return;
+                            }
+                            const result = await this.processTraderData(ca, responseData.data);
+                            resolve(result);
+                        } catch (error) {
+                            reject(new Error(`数据处理失败: ${error.message}`));
+                        }
+                    },
+                    onerror: (error) => reject(new Error(`请求失败: ${error.message}`))
+                });
+            });
+        }
+
+        // 显示批量采集窗口
+        showBatchCollectWindow() {
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 80%;
+                max-width: 1200px;
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                z-index: 10002;
+                display: flex;
+                gap: 20px;
+            `;
+
+            // 左侧输入区域
+            const leftPanel = document.createElement('div');
+            leftPanel.style.cssText = `
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            `;
+
+            const title = document.createElement('h3');
+            title.textContent = '批量采集';
+            title.style.cssText = 'margin: 0; color: #333;';
+
+            const textarea = document.createElement('textarea');
+            textarea.placeholder = '请输入CA地址，每行一个';
+            textarea.style.cssText = `
+                width: 100%;
+                height: 300px;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                resize: none;
+                font-family: monospace;
+            `;
+
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'display: flex; gap: 10px;';
+
+            const startButton = document.createElement('button');
+            startButton.textContent = '开始采集';
+            startButton.style.cssText = `
+                padding: 10px 20px;
+                background: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            `;
+
+            const closeButton = document.createElement('button');
+            closeButton.textContent = '关闭';
+            closeButton.style.cssText = `
+                padding: 10px 20px;
+                background: #f44336;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            `;
+
+            // 右侧状态显示区域
+            const rightPanel = document.createElement('div');
+            rightPanel.style.cssText = `
+                flex: 1;
+                border-left: 1px solid #eee;
+                padding-left: 20px;
+                display: flex;
+                flex-direction: column;
+            `;
+
+            const statusTitle = document.createElement('h3');
+            statusTitle.textContent = '采集状态';
+            statusTitle.style.cssText = 'margin: 0; color: #333;';
+
+            const statusContainer = document.createElement('div');
+            statusContainer.style.cssText = `
+                flex: 1;
+                overflow-y: auto;
+                margin-top: 10px;
+                border: 1px solid #eee;
+                border-radius: 5px;
+                padding: 10px;
+            `;
+
+            const summaryContainer = document.createElement('div');
+            summaryContainer.style.cssText = `
+                margin-top: 10px;
+                padding: 10px;
+                background: #f5f5f5;
+                border-radius: 5px;
+            `;
+
+            // 组装UI
+            buttonContainer.appendChild(startButton);
+            buttonContainer.appendChild(closeButton);
+
+            leftPanel.appendChild(title);
+            leftPanel.appendChild(textarea);
+            leftPanel.appendChild(buttonContainer);
+
+            rightPanel.appendChild(statusTitle);
+            rightPanel.appendChild(statusContainer);
+            rightPanel.appendChild(summaryContainer);
+
+            modal.appendChild(leftPanel);
+            modal.appendChild(rightPanel);
+
+            // 关闭按钮事件
+            closeButton.onclick = () => {
+                document.body.removeChild(modal);
+            };
+
+            // 开始采集按钮事件
+            startButton.onclick = async () => {
+                const cas = textarea.value.trim().split('\n').filter(ca => ca.trim());
+                if (cas.length === 0) {
+                    alert('请输入至少一个CA地址');
+                    return;
+                }
+
+                startButton.disabled = true;
+                startButton.style.opacity = '0.5';
+                statusContainer.innerHTML = '';
+                summaryContainer.innerHTML = '';
+
+                let totalSuccess = 0;
+                let totalInserted = 0;
+                let totalUpdated = 0;
+                let totalFailed = 0;
+
+                for (let i = 0; i < cas.length; i++) {
+                    const ca = cas[i].trim();
+                    DebugLogger.log(`开始处理第 ${i + 1}/${cas.length} 个CA: ${ca}`, CONFIG.DEBUG_LEVEL.INFO);
+                    
+                    const statusRow = document.createElement('div');
+                    statusRow.style.cssText = `
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 5px;
+                        border-bottom: 1px solid #eee;
+                    `;
+
+                    const caText = document.createElement('div');
+                    caText.textContent = ca;
+                    caText.style.cssText = 'font-family: monospace; flex: 1;';
+
+                    const status = document.createElement('div');
+                    status.style.cssText = 'margin-left: 10px; display: flex; align-items: center;';
+
+                    const retryButton = document.createElement('button');
+                    retryButton.textContent = '重试';
+                    retryButton.style.cssText = `
+                        padding: 2px 8px;
+                        background: #2196F3;
+                        color: white;
+                        border: none;
+                        border-radius: 3px;
+                        cursor: pointer;
+                        margin-left: 10px;
+                        display: none;
+                    `;
+
+                    status.appendChild(retryButton);
+                    statusRow.appendChild(caText);
+                    statusRow.appendChild(status);
+                    statusContainer.appendChild(statusRow);
+
+                    try {
+                        status.textContent = '正在采集...';
+                        DebugLogger.log(`正在请求API数据...`, CONFIG.DEBUG_LEVEL.INFO);
+
+                        const result = await new Promise((resolve, reject) => {
+                            GM_xmlhttpRequest({
+                                method: 'GET',
+                                url: `https://gmgn.ai/defi/quotation/v1/tokens/top_traders/sol/${ca}?orderby=profit&direction=desc`,
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                                    'Origin': 'https://gmgn.ai',
+                                    'Referer': 'https://gmgn.ai/'
+                                },
+                                onload: async (response) => {
+                                    try {
+                                        DebugLogger.log(`收到API响应: ${response.status}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        DebugLogger.log(`响应内容: ${response.responseText.substring(0, 200)}...`, CONFIG.DEBUG_LEVEL.INFO);
+                                        
+                                        const responseData = JSON.parse(response.responseText);
+                                        if (responseData.code !== 0 || !Array.isArray(responseData.data)) {
+                                            const error = new Error(`API返回数据格式错误: ${JSON.stringify(responseData)}`);
+                                            DebugLogger.log(error.message, CONFIG.DEBUG_LEVEL.ERROR);
+                                            reject(error);
+                                            return;
+                                        }
+                                        
+                                        DebugLogger.log(`成功解析数据，开始处理...`, CONFIG.DEBUG_LEVEL.INFO);
+                                        const processedCount = await this.processTraderData(ca, responseData.data);
+                                        resolve(processedCount);
+                                    } catch (error) {
+                                        DebugLogger.log(`数据处理失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                        reject(new Error(`数据处理失败: ${error.message}`));
+                                    }
+                                },
+                                onerror: (error) => {
+                                    DebugLogger.log(`API请求失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                    reject(new Error(`请求失败: ${error.message}`));
+                                }
+                            });
+                        });
+
+                        status.textContent = `✓ 成功 (${result.inserted}新增, ${result.updated}更新)`;
+                        status.style.color = '#4CAF50';
+                        totalSuccess++;
+                        totalInserted += result.inserted;
+                        totalUpdated += result.updated;
+                        DebugLogger.log(`处理完成: 新增${result.inserted}条，更新${result.updated}条`, CONFIG.DEBUG_LEVEL.INFO);
+                    } catch (error) {
+                        DebugLogger.log(`处理失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                        status.textContent = `✗ 失败: ${error.message}`;
+                        status.style.color = '#f44336';
+                        retryButton.style.display = 'inline-block';
+                        totalFailed++;
+
+                        // 重试按钮事件
+                        retryButton.onclick = async () => {
+                            retryButton.disabled = true;
+                            status.textContent = '重试中...';
+                            status.style.color = '';
+                            DebugLogger.log(`开始重试CA: ${ca}`, CONFIG.DEBUG_LEVEL.INFO);
+                            try {
+                                const result = await this.collectSingleCA(ca);
+                                status.textContent = `✓ 成功 (${result.inserted}新增, ${result.updated}更新)`;
+                                status.style.color = '#4CAF50';
+                                retryButton.style.display = 'none';
+                                totalSuccess++;
+                                totalFailed--;
+                                totalInserted += result.inserted;
+                                totalUpdated += result.updated;
+                                updateSummary();
+                                DebugLogger.log(`重试成功: 新增${result.inserted}条，更新${result.updated}条`, CONFIG.DEBUG_LEVEL.INFO);
+                            } catch (error) {
+                                DebugLogger.log(`重试失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                status.textContent = `✗ 失败: ${error.message}`;
+                                status.style.color = '#f44336';
+                                retryButton.disabled = false;
+                            }
+                        };
+                    }
+
+                    // 更新汇总信息
+                    const updateSummary = async () => {
+                        const dbStats = await this.getDBStats();
+                        summaryContainer.innerHTML = `
+                            <div style="font-weight: bold; margin-bottom: 5px;">采集统计</div>
+                            <div>本次采集${cas.length}个CA，成功${totalSuccess}个，失败${totalFailed}个</div>
+                            <div>新插入${totalInserted}条记录，更新${totalUpdated}条记录</div>
+                            <div>数据库现有${dbStats.caCount}个CA，${dbStats.recordCount}条记录</div>
+                        `;
+                        DebugLogger.log(`更新统计信息: 成功${totalSuccess}个，失败${totalFailed}个`, CONFIG.DEBUG_LEVEL.INFO);
+                    };
+                    await updateSummary();
+                }
+
+                startButton.disabled = false;
+                startButton.style.opacity = '1';
+                DebugLogger.log('批量采集完成', CONFIG.DEBUG_LEVEL.INFO);
+            };
+
+            document.body.appendChild(modal);
         }
     }
 
