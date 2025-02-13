@@ -138,19 +138,22 @@
 
                         // 新增的索引
                         store.createIndex('dev', 'dev', { unique: false });
-                        store.createIndex('last_trade_time', 'last_trade_time', { unique: false });
+                        store.createIndex('create_time', 'create_time', { unique: false });
+                        store.createIndex('launch_time', 'launch_time', { unique: false });
 
                         // 新增字段索引
                         store.createIndex('sol_balance', 'sol_balance', { unique: false });
-                        store.createIndex('last_active_time', 'last_active_time', { unique: false });
                         store.createIndex('start_holding_at', 'start_holding_at', { unique: false });
                         store.createIndex('end_holding_at', 'end_holding_at', { unique: false });
                         store.createIndex('holding_period', 'holding_period', { unique: false });
-                        
+
                         // 新增tag字段索引
                         store.createIndex('tag_1', 'tag_1', { unique: false });
                         store.createIndex('tag_2', 'tag_2', { unique: false });
                         store.createIndex('tag_3', 'tag_3', { unique: false });
+
+                        // 新增 buy_after_launch_interval 索引
+                        store.createIndex('buy_after_launch_interval', 'buy_after_launch_interval', { unique: false });
                     }
                 };
             });
@@ -182,14 +185,17 @@
 
                             // 新增字段
                             dev: trader.dev,
-                            last_trade_time: trader.last_trade_time,
+                            create_time: trader.create_time,
+                            launch_time: trader.launch_time,
 
                             // 新增的字段
                             sol_balance: trader.sol_balance,
-                            last_active_time: trader.last_active_time,
                             start_holding_at: trader.start_holding_at,
                             end_holding_at: trader.end_holding_at,
-                            holding_period: trader.holding_period
+                            holding_period: trader.holding_period,
+
+                            // 新增 buy_after_launch_interval 字段
+                            buy_after_launch_interval: trader.buy_after_launch_interval
                         };
                         store.put(updatedTrader);
                         DebugLogger.log(`更新聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
@@ -281,14 +287,16 @@
                                     resolve({
                                         symbol: tokenInfo.symbol || 'Unknown Token',
                                         dev: tokenInfo.creator,
-                                        last_trade_time: tokenInfo.last_trade_timestamp
+                                        created_timestamp: tokenInfo.created_timestamp,
+                                        launch_time: tokenInfo.last_trade_timestamp
                                     });
                                 } else {
                                     DebugLogger.log('未找到代币名称', CONFIG.DEBUG_LEVEL.WARNING);
                                     resolve({
                                         symbol: 'Unknown Token',
                                         dev: '',
-                                        last_trade_time: null
+                                        created_timestamp: null,
+                                        launch_time: null
                                     });
                                 }
                             } catch (error) {
@@ -296,7 +304,8 @@
                                 resolve({
                                     symbol: 'Unknown Token',
                                     dev: '',
-                                    last_trade_time: null
+                                    created_timestamp: null,
+                                    launch_time: null
                                 });
                             }
                         },
@@ -311,7 +320,8 @@
                 return {
                     symbol: 'Unknown Token',
                     dev: '',
-                    last_trade_time: null
+                    created_timestamp: null,
+                    launch_time: null
                 };
             }
         }
@@ -406,9 +416,22 @@
                 const processedTraders = [];
                 for (const [index, item] of topTraders.entries()) {
                     // 计算持有时间
-                    const startHoldingAt = item.start_holding_at * 1000;
+                    const startHoldingAtTimestamp = item.start_holding_at * 1000; // 转换为毫秒
                     const endHoldingAt = item.end_holding_at ? item.end_holding_at * 1000 : Date.now();
-                    const holdingPeriod = Math.round((endHoldingAt - startHoldingAt) / 60000); // 转换为分钟
+                    const holdingPeriod = Math.round((endHoldingAt - startHoldingAtTimestamp) / 60000); // 转换为分钟
+
+                    // 计算 buy_after_launch_interval
+                    const createTime = this.tokenName.created_timestamp;
+                    const launchTime = this.tokenName.launch_time;
+                    let buyAfterLaunchInterval = null;
+
+                    if (startHoldingAtTimestamp && createTime) {
+                        if (launchTime && startHoldingAtTimestamp > launchTime) {
+                            buyAfterLaunchInterval = Math.round((startHoldingAtTimestamp - launchTime) / 1000); // 转换为秒
+                        } else {
+                            buyAfterLaunchInterval = Math.round((startHoldingAtTimestamp - createTime) / 1000); // 转换为秒
+                        }
+                    }
 
                     const trader = {
                         token: this.tokenName.symbol,
@@ -420,26 +443,30 @@
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
                         profit_tag: index + 1,
-                        
+
                         // 新增tag字段，初始值为空字符串
                         tag_1: '',
                         tag_2: '',
                         tag_3: '',
-                        
+
                         update_time: this.getBeijingTime(),
 
                         // 新增字段
                         dev: this.tokenName.dev,
-                        last_trade_time: this.tokenName.last_trade_time,
+                        create_time: this.tokenName.created_timestamp,
+                        launch_time: this.tokenName.launch_time ? new Date(this.tokenName.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
 
                         // 新增的字段
                         sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
-                        last_active_time: new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
+                        last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
                         start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                         end_holding_at: item.end_holding_at
                             ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
                             : null,
-                        holding_period: holdingPeriod
+                        holding_period: holdingPeriod,
+
+                        // 新增 buy_after_launch_interval 字段
+                        buy_after_launch_interval: buyAfterLaunchInterval
                     };
 
                     await this.db.upsertTrader(trader);
@@ -503,7 +530,7 @@
                             ca: row['合约'],
                             address: row['聪明钱'],
                             dev: row['Dev'],
-                            last_trade_time: row['Pump内盘发射'] !== 'N/A' ? new Date(row['Pump内盘发射']).getTime() : null,
+                            launch_time: row['Pump内盘发射'] !== 'N/A' ? new Date(row['Pump内盘发射']).getTime() : null,
                             sol_balance: row['SOL余额'] !== 'N/A' ? parseFloat(row['SOL余额']) : null,
                             last_active_time: row['最后活跃时间'],
                             start_holding_at: row['买入时间'],
@@ -515,7 +542,10 @@
                             twitter_username: row['Twitter'],
                             user_name: row['用户名'],
                             profit_tag: parseInt(row['利润排名']),
-                            update_time: row['更新时间']
+                            update_time: row['更新时间'],
+
+                            // 新增 buy_after_launch_interval 字段
+                            buy_after_launch_interval: row['Pump到买入(秒)'] !== 'N/A' ? parseInt(row['Pump到买入(秒)']) : null
                         };
 
                         await this.db.upsertTrader(trader);
@@ -710,9 +740,10 @@
                 'Twitter': '50px',
                 '用户名': '50px',
                 '排名': '30px',
-                '标签1': '80px',
-                '标签2': '80px',
-                '标签3': '80px',
+                '标签1': '50px',
+                '标签2': '50px',
+                '标签3': '50px',
+                'Pump到买入(秒)': '100px',
                 '更新时间': '120px'
             };
 
@@ -724,7 +755,7 @@
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', '持有时长(分钟)',
                 '买入金额', '卖出金额', '到手利润',
-                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
+                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', 'Pump到买入(秒)', '更新时间'
             ];
 
             headers.forEach((headerText, index) => {
@@ -863,15 +894,15 @@
                         trader.ca,
                         trader.address,
                         trader.dev || 'N/A',
-                        trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
-                        
+                        trader.launch_time ? new Date(trader.launch_time).toLocaleString() : 'N/A',
+
                         // 新增字段
                         this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
                         trader.last_active_time || 'N/A',
                         trader.start_holding_at || 'N/A',
                         trader.end_holding_at || 'N/A',
                         trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
-                        
+
                         this.formatNumberWithCommas(trader.buy_volume),
                         this.formatNumberWithCommas(trader.sell_volume),
                         this.formatNumberWithCommas(trader.realized_profit),
@@ -881,12 +912,18 @@
                         trader.tag_1 || '',
                         trader.tag_2 || '',
                         trader.tag_3 || '',
+                        trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
                         trader.update_time,
                     ];
 
                     rowData.forEach((cellData, index) => {
                         const td = document.createElement('td');
-                        
+                        td.dataset.columnIndex = index;
+                        td.dataset.originalValue = cellData;
+
+                        // 可编辑的列（除了某些特殊列）
+                        const editableColumns = [0, 3, 16, 17, 18]; // 名称、Dev、标签1、标签2、标签3
+
                         // 处理Twitter链接
                         if (index === 13 && cellData !== 'N/A') {  // Twitter列
                             const link = document.createElement('a');
@@ -901,7 +938,119 @@
                             link.onmouseout = () => link.style.textDecoration = 'none';
                             td.appendChild(link);
                         } else {
-                            td.textContent = cellData;
+                            // 可编辑单元格的处理
+                            if (editableColumns.includes(index)) {
+                                td.style.cursor = 'text';
+                                td.textContent = cellData;
+
+                                td.ondblclick = (e) => {
+                                    const currentTrader = trader; // 保存当前行的 trader 数据
+                                    // 创建输入框
+                                    const input = document.createElement('input');
+                                    input.type = 'text';
+                                    input.value = cellData;
+                                    input.style.cssText = `
+                                        width: 100%;
+                                        border: 1px solid #4CAF50;
+                                        padding: 4px;
+                                        box-sizing: border-box;
+                                    `;
+
+                                    // 创建操作按钮容器
+                                    const actionContainer = document.createElement('div');
+                                    actionContainer.style.cssText = `
+                                        display: flex;
+                                        margin-left: 5px;
+                                    `;
+
+                                    // 确认按钮
+                                    const confirmBtn = document.createElement('button');
+                                    confirmBtn.innerHTML = '✓';
+                                    confirmBtn.style.cssText = `
+                                        background-color: green;
+                                        color: white;
+                                        border: none;
+                                        padding: 4px 8px;
+                                        margin-right: 5px;
+                                        cursor: pointer;
+                                    `;
+
+                                    // 取消按钮
+                                    const cancelBtn = document.createElement('button');
+                                    cancelBtn.innerHTML = '✗';
+                                    cancelBtn.style.cssText = `
+                                        background-color: red;
+                                        color: white;
+                                        border: none;
+                                        padding: 4px 8px;
+                                        cursor: pointer;
+                                    `;
+
+                                    // 替换单元格内容
+                                    td.innerHTML = '';
+                                    td.appendChild(input);
+                                    actionContainer.appendChild(confirmBtn);
+                                    actionContainer.appendChild(cancelBtn);
+                                    td.appendChild(actionContainer);
+
+                                    input.focus();
+
+                                    // 确认更新
+                                    confirmBtn.onclick = async () => {
+                                        const newValue = input.value;
+
+                                        // 更新数据库
+                                        try {
+                                            const transaction = this.db.db.transaction([this.db.storeName], 'readwrite');
+                                            const store = transaction.objectStore(this.db.storeName);
+
+                                            const traderIndex = store.index('ca_address');
+                                            const request = traderIndex.get(IDBKeyRange.only([currentTrader.ca, currentTrader.address]));
+
+                                            request.onsuccess = () => {
+                                                const traderToUpdate = request.result;
+                                                if (traderToUpdate) {
+                                                    // 根据列更新不同的字段
+                                                    switch(index) {
+                                                        case 0: traderToUpdate.token = newValue; break;
+                                                        case 3: traderToUpdate.dev = newValue; break;
+                                                        case 16: traderToUpdate.tag_1 = newValue; break;
+                                                        case 17: traderToUpdate.tag_2 = newValue; break;
+                                                        case 18: traderToUpdate.tag_3 = newValue; break;
+                                                    }
+
+                                                    // 更新数据库记录
+                                                    const updateRequest = store.put(traderToUpdate);
+                                                    updateRequest.onsuccess = () => {
+                                                        td.textContent = newValue;
+                                                        td.dataset.originalValue = newValue;
+                                                        DebugLogger.log(`更新成功: ${newValue}`, CONFIG.DEBUG_LEVEL.INFO);
+                                                    };
+                                                    updateRequest.onerror = () => {
+                                                        DebugLogger.log('更新失败', CONFIG.DEBUG_LEVEL.ERROR);
+                                                        td.textContent = cellData; // 恢复原值
+                                                    };
+                                                }
+                                            };
+
+                                            request.onerror = () => {
+                                                DebugLogger.log('获取数据失败', CONFIG.DEBUG_LEVEL.ERROR);
+                                                td.textContent = cellData; // 恢复原值
+                                            };
+                                        } catch (error) {
+                                            DebugLogger.log(`更新错误: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                            td.textContent = cellData; // 恢复原值
+                                        }
+                                    };
+
+                                    // 取消编辑
+                                    cancelBtn.onclick = () => {
+                                        td.textContent = cellData;
+                                    };
+                                };
+                            } else {
+                                td.textContent = cellData;
+                            }
                         }
 
                         td.style.cssText = `
@@ -939,7 +1088,7 @@
                         }
 
                         // 如果是查询的字段，添加高亮
-                        if (queryValue && queryType === headers[index] && 
+                        if (queryValue && queryType === headers[index] &&
                             String(cellData).toLowerCase().includes(queryValue.toLowerCase())) {
                             td.style.fontWeight = 'bold';
                             td.style.color = '#1a73e8';
@@ -971,7 +1120,7 @@
                     '名称': trader.token,
                     '合约': trader.ca,
                     'Dev': trader.dev || 'N/A',
-                    'Pump内盘发射': trader.last_trade_time ? new Date(trader.last_trade_time).toLocaleString() : 'N/A',
+                    'Pump内盘发射': trader.launch_time ? new Date(trader.launch_time).toLocaleString() : 'N/A',
                     '聪明钱': trader.address,
 
                     // 新增字段
@@ -990,6 +1139,7 @@
                     '标签1': trader.tag_1 || '',
                     '标签2': trader.tag_2 || '',
                     '标签3': trader.tag_3 || '',
+                    'Pump到买入(秒)': trader.buy_after_launch_interval !== undefined ? trader.buy_after_launch_interval : 'N/A',
                     '更新时间': trader.update_time,
                 })));
 
