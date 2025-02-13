@@ -16,10 +16,10 @@
     // 全局配置常量
     const CONFIG = {
         // 最低实现利润阈值（美元）
-        MIN_REALIZED_PROFIT: 5000,
+        MIN_REALIZED_PROFIT: 3000,
 
         // 最大保留交易者数量
-        MAX_TRADERS: 20,
+        MAX_TRADERS: 30,
 
         // 调试日志级别
         DEBUG_LEVEL: {
@@ -725,25 +725,26 @@
             // 定义列宽配置
             const columnWidths = {
                 '名称': '50px',
-                '合约': '200px',
-                '聪明钱': '200px',
-                'Dev': '200px',
+                '合约': '100px',
+                '聪明钱': '100px',
+                'Dev': '100px',
                 'Pump内盘发射': '120px',
                 'SOL余额': '80px',
                 '最后活跃时间': '120px',
                 '买入时间': '120px',
                 '卖出时间': '120px',
+                'Pump到买入(秒)': '100px',
                 '持有时长(分钟)': '100px',
-                '买入金额': '80px',
-                '卖出金额': '80px',
-                '到手利润': '80px',
+                '买入金额': '60px',
+                '卖出金额': '60px',
+                '到手利润': '60px',
                 'Twitter': '50px',
                 '用户名': '50px',
                 '排名': '30px',
                 '标签1': '50px',
                 '标签2': '50px',
                 '标签3': '50px',
-                'Pump到买入(秒)': '100px',
+
                 '更新时间': '120px'
             };
 
@@ -753,9 +754,9 @@
             const headerRow = document.createElement('tr');
             const headers = [
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
-                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', '持有时长(分钟)',
+                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
                 '买入金额', '卖出金额', '到手利润',
-                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', 'Pump到买入(秒)', '更新时间'
+                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
             headers.forEach((headerText, index) => {
@@ -901,6 +902,8 @@
                         trader.last_active_time || 'N/A',
                         trader.start_holding_at || 'N/A',
                         trader.end_holding_at || 'N/A',
+                        trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
+
                         trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
 
                         this.formatNumberWithCommas(trader.buy_volume),
@@ -912,7 +915,6 @@
                         trader.tag_1 || '',
                         trader.tag_2 || '',
                         trader.tag_3 || '',
-                        trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
                         trader.update_time,
                     ];
 
