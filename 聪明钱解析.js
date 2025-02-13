@@ -737,7 +737,7 @@
                 '持有时长(分钟)': '100px',
                 '买入金额': '60px',
                 '卖出金额': '60px',
-                '到手利润': '60px',
+                '到手利润': '70px',
                 'Twitter': '50px',
                 '用户名': '50px',
                 '排名': '30px',
@@ -751,6 +751,23 @@
             // 创建表头
             const thead = document.createElement('thead');
             thead.style.cssText = 'background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;';
+
+            // 添加必要的样式
+            const styleSheet = document.createElement('style');
+            styleSheet.textContent = `
+                .smart-money-row {
+                    transition: background-color 0.2s ease;
+                }
+                .smart-money-row:hover {
+                    background-color: #f5f5f5;
+                }
+                .smart-money-row.selected {
+                    background-color: #e8f5e9;
+                    border-left: 4px solid #4CAF50;
+                }
+            `;
+            document.head.appendChild(styleSheet);
+
             const headerRow = document.createElement('tr');
             const headers = [
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
@@ -888,7 +905,21 @@
                 // 创建表体
                 sortedTraders.forEach(trader => {
                     const row = document.createElement('tr');
+                    row.className = 'smart-money-row';
                     row.style.cssText = 'border-bottom: 1px solid #ddd;';
+
+                    // 添加行点击事件
+                    row.onclick = (e) => {
+                        // 如果点击的是链接或输入框，不触发行选择
+                        if (e.target.tagName === 'A' || e.target.tagName === 'INPUT') return;
+
+                        // 移除其他行的选中状态
+                        tbody.querySelectorAll('.smart-money-row').forEach(r => {
+                            r.classList.remove('selected');
+                        });
+                        // 添加当前行的选中状态
+                        row.classList.add('selected');
+                    };
 
                     const rowData = [
                         trader.token,
@@ -927,7 +958,7 @@
                         const editableColumns = [0, 3, 16, 17, 18]; // 名称、Dev、标签1、标签2、标签3
 
                         // 处理Twitter链接
-                        if (index === 13 && cellData !== 'N/A') {  // Twitter列
+                        if (index === 14 && cellData !== 'N/A') {  // Twitter列
                             const link = document.createElement('a');
                             link.href = `https://x.com/${cellData}`;
                             link.target = '_blank';
@@ -1065,20 +1096,26 @@
                         `;
 
                         // 处理利润高亮
-                        if (index === 12) {  // realized_profit列
+                        if (index === 13) {// realized_profit列
                             const profit = parseFloat(cellData.replace(/,/g, ''));
-                            if (profit >= 100000) {
-                                // 超过10万的更醒目显示
-                                td.style.cssText += `
-                                    color: #ff0000;
-                                    font-weight: bold;
-                                    background-color: #fff0f0;
-                                    font-size: 14px;
-                                    text-shadow: 0 0 1px rgba(255,0,0,0.3);
-                                `;
-                            } else if (profit >= 10000) {
-                                // 超过1万的红色显示
-                                td.style.color = '#ff0000';
+                            if (!isNaN(profit)) {// 确保转换后是有效数字
+                                if (profit >= 100000) {
+                                    // 超过10万的更醒目显示
+                                    td.style.cssText += `
+                                        color: #ff0000 !important;
+                                        font-weight: bold !important;
+                                        background-color: #fff0f0 !important;
+                                        font-size: 14px !important;
+                                        text-shadow: 0 0 1px rgba(255,0,0,0.3) !important;
+                                        border-left: 3px solid #ff0000 !important;
+                                    `;
+                                } else if (profit >= 10000) {
+                                    // 超过1万的红色显示
+                                    td.style.cssText += `
+                                        color: #ff0000 !important;
+                                        font-weight: bold !important;
+                                    `;
+                                }
                             }
                         }
 
