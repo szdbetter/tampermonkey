@@ -297,10 +297,12 @@
             this.tokenName = '';
             this.progressBar = null;
             this.dataViewerModal = null;
-            this.pageSize = 100; // 每页显示100条记录
+            this.pageSize = 200; // 默认每页显示200条记录
             this.currentPage = 1;
             this.totalPages = 1;
             this.performanceMonitor = new PerformanceMonitor();
+            this.currentSortColumn = null; // 当前排序的列
+            this.isAscending = true; // 排序方向
         }
 
         createProgressBar() {
@@ -647,6 +649,19 @@
          * 创建数据导出和查看的UI界面
          */
         createDataViewerUI() {
+            // 创建遮罩层
+            const overlay = document.createElement('div');
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                z-index: 10000;
+                display: none;
+            `;
+
             // 创建模态框容器
             this.dataViewerModal = document.createElement('div');
             this.dataViewerModal.style.cssText = `
@@ -666,6 +681,17 @@
                 display: none;
                 flex-direction: column;
             `;
+
+            // 点击遮罩层关闭窗口
+            overlay.onclick = (e) => {
+                if (e.target === overlay) {
+                    this.toggleDataViewer();
+                }
+            };
+
+            // 将模态框添加到遮罩层中
+            overlay.appendChild(this.dataViewerModal);
+            document.body.appendChild(overlay);
 
             // 标题
             const title = document.createElement('h2');
@@ -707,6 +733,35 @@
                 queryInput.value = '';
                 this.loadAndDisplayData();
             };
+
+            // 添加页面大小选择器
+            const pageSizeContainer = document.createElement('div');
+            pageSizeContainer.style.cssText = 'display: flex; align-items: center; margin-right: 15px;';
+            
+            const pageSizeLabel = document.createElement('span');
+            pageSizeLabel.textContent = '每页显示：';
+            pageSizeLabel.style.marginRight = '5px';
+
+            const pageSizeSelect = document.createElement('select');
+            pageSizeSelect.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd;';
+            
+            [200, 500, 1000, 'ALL'].forEach(size => {
+                const option = document.createElement('option');
+                option.value = size;
+                option.textContent = size === 'ALL' ? '全部' : `${size}条`;
+                pageSizeSelect.appendChild(option);
+            });
+
+            pageSizeSelect.value = this.pageSize;
+            pageSizeSelect.onchange = () => {
+                this.pageSize = pageSizeSelect.value === 'ALL' ? Number.MAX_SAFE_INTEGER : parseInt(pageSizeSelect.value);
+                this.currentPage = 1;
+                this.loadAndDisplayData();
+            };
+
+            pageSizeContainer.appendChild(pageSizeLabel);
+            pageSizeContainer.appendChild(pageSizeSelect);
+            queryContainer.appendChild(pageSizeContainer);
 
             queryContainer.appendChild(queryTypeSelect);
             queryContainer.appendChild(queryInput);
@@ -765,8 +820,6 @@
             buttonContainer.appendChild(closeButton);
             buttonContainer.appendChild(testDataSourceButton);
             this.dataViewerModal.appendChild(buttonContainer);
-
-            document.body.appendChild(this.dataViewerModal);
         }
 
         /**
@@ -784,12 +837,14 @@
                     this.createDataViewerUI();
                 }
 
-                const currentDisplay = this.dataViewerModal.style.display;
+                const overlay = this.dataViewerModal.parentElement;
+                const currentDisplay = overlay.style.display;
                 if (currentDisplay === 'none' || currentDisplay === '') {
-                    // 显示加载中状态
+                    overlay.style.display = 'block';
                     this.dataViewerModal.style.display = 'flex';
                     this.loadAndDisplayData();
                 } else {
+                    overlay.style.display = 'none';
                     this.dataViewerModal.style.display = 'none';
                 }
             } catch (error) {
@@ -833,84 +888,109 @@
                 const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
                 const store = transaction.objectStore(this.db.storeName);
                 
-                // 首先获取总记录数
-                const countRequest = store.count();
+                // 获取所有记录以计算总数
+                const getAllRequest = store.getAll();
                 
-                countRequest.onerror = (event) => {
-                    const error = `获取记录数失败: ${event.target.error}`;
-                    DebugLogger.log(error, 'error');
-                    throw new Error(error);
-                };
-
-                countRequest.onsuccess = (event) => {
+                getAllRequest.onsuccess = () => {
                     try {
-                        const totalRecords = event.target.result;
-                        DebugLogger.log(`总记录数: ${totalRecords}`, 'info');
-                        this.totalPages = Math.ceil(totalRecords / this.pageSize);
+                        const allRecords = getAllRequest.result;
+                        const uniqueTokens = new Set(allRecords.map(record => record.token));
+                        const totalRecords = allRecords.length;
+                        const totalTokens = uniqueTokens.size;
 
-                        // 获取当前页的数据
-                        const offset = (this.currentPage - 1) * this.pageSize;
-                        const cursorRequest = store.openCursor();
-                        const pageData = [];
-                        let count = 0;
+                        // 更新标题显示总记录数和总代币数
+                        const title = this.dataViewerModal.querySelector('h2');
+                        title.textContent = `聪明钱数据库 (总计${totalTokens}个代币，${totalRecords}条记录)`;
 
-                        cursorRequest.onerror = (event) => {
-                            const error = `打开游标失败: ${event.target.error}`;
+                        // 继续原有的分页逻辑
+                        const countRequest = store.count();
+                        
+                        countRequest.onerror = (event) => {
+                            const error = `获取记录数失败: ${event.target.error}`;
                             DebugLogger.log(error, 'error');
                             throw new Error(error);
                         };
 
-                        cursorRequest.onsuccess = (event) => {
+                        countRequest.onsuccess = (event) => {
                             try {
-                                const cursor = event.target.result;
-                                if (cursor && count < offset) {
-                                    count++;
-                                    cursor.continue();
-                                } else if (cursor && pageData.length < this.pageSize) {
-                                    // 应用查询过滤
-                                    const trader = cursor.value;
-                                    if (!queryType || !queryValue || this.matchesQuery(trader, queryType, queryValue)) {
-                                        pageData.push(trader);
-                                        DebugLogger.log(`加载记录: ${trader.ca} - ${trader.address}`, 'info');
-                                    }
-                                    cursor.continue();
-                                } else {
-                                    // 清除加载提示
-                                    const loadingIndicator = tableContainer.querySelector('.loading-indicator');
-                                    if (loadingIndicator) {
-                                        loadingIndicator.remove();
-                                    }
+                                const totalRecords = event.target.result;
+                                DebugLogger.log(`总记录数: ${totalRecords}`, 'info');
+                                this.totalPages = Math.ceil(totalRecords / this.pageSize);
 
-                                    // 渲染数据和分页控件
-                                    DebugLogger.log(`本页加载完成，共 ${pageData.length} 条记录`, 'info');
-                                    this.renderTableWithData(pageData, tableContainer);
-                                    
-                                    // 移除旧的分页控件
-                                    const oldPagination = this.dataViewerModal.querySelector('.pagination-container');
-                                    if (oldPagination) {
-                                        oldPagination.remove();
+                                // 获取当前页的数据
+                                const offset = (this.currentPage - 1) * this.pageSize;
+                                const cursorRequest = store.openCursor();
+                                const pageData = [];
+                                let count = 0;
+
+                                cursorRequest.onerror = (event) => {
+                                    const error = `打开游标失败: ${event.target.error}`;
+                                    DebugLogger.log(error, 'error');
+                                    throw new Error(error);
+                                };
+
+                                cursorRequest.onsuccess = (event) => {
+                                    try {
+                                        const cursor = event.target.result;
+                                        if (cursor && count < offset) {
+                                            count++;
+                                            cursor.continue();
+                                        } else if (cursor && pageData.length < this.pageSize) {
+                                            // 应用查询过滤
+                                            const trader = cursor.value;
+                                            if (!queryType || !queryValue || this.matchesQuery(trader, queryType, queryValue)) {
+                                                pageData.push(trader);
+                                                DebugLogger.log(`加载记录: ${trader.ca} - ${trader.address}`, 'info');
+                                            }
+                                            cursor.continue();
+                                        } else {
+                                            // 清除加载提示
+                                            const loadingIndicator = tableContainer.querySelector('.loading-indicator');
+                                            if (loadingIndicator) {
+                                                loadingIndicator.remove();
+                                            }
+
+                                            // 渲染数据和分页控件
+                                            DebugLogger.log(`本页加载完成，共 ${pageData.length} 条记录`, 'info');
+                                            this.renderTableWithData(pageData, tableContainer);
+                                            
+                                            // 移除旧的分页控件
+                                            const oldPagination = this.dataViewerModal.querySelector('.pagination-container');
+                                            if (oldPagination) {
+                                                oldPagination.remove();
+                                            }
+                                            
+                                            // 渲染新的分页控件
+                                            this.renderPagination(totalRecords);
+                                            
+                                            const duration = endTimer();
+                                            DebugLogger.log(`数据加载耗时: ${duration.toFixed(2)}ms`, 'info');
+                                        }
+                                    } catch (error) {
+                                        DebugLogger.log(`处理游标数据失败: ${error}`, 'error');
+                                        tableContainer.innerHTML = `
+                                            <div style="text-align: center; padding: 20px; color: #f44336;">
+                                                <div>数据处理失败: ${error.message || '未知错误'}</div>
+                                                <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px;">刷新页面</button>
+                                            </div>
+                                        `;
                                     }
-                                    
-                                    // 渲染新的分页控件
-                                    this.renderPagination(totalRecords);
-                                    
-                                    const duration = endTimer();
-                                    DebugLogger.log(`数据加载耗时: ${duration.toFixed(2)}ms`, 'info');
-                                }
+                                };
                             } catch (error) {
-                                DebugLogger.log(`处理游标数据失败: ${error}`, 'error');
-                                tableContainer.innerHTML = `
-                                    <div style="text-align: center; padding: 20px; color: #f44336;">
-                                        <div>数据处理失败: ${error.message || '未知错误'}</div>
-                                        <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px;">刷新页面</button>
-                                    </div>
-                                `;
+                                DebugLogger.log(`处理记录数据失败: ${error}`, 'error');
+                                throw error;
                             }
                         };
+
                     } catch (error) {
-                        DebugLogger.log(`处理记录数据失败: ${error}`, 'error');
+                        DebugLogger.log(`获取数据失败: ${error}`, 'error');
                         throw error;
                     }
+                };
+
+                getAllRequest.onerror = (event) => {
+                    DebugLogger.log(`获取数据失败: ${event.target.error}`, 'error');
+                    throw event.target.error;
                 };
 
             } catch (error) {
@@ -1004,6 +1084,7 @@
 
             // 定义列宽配置
             const columnWidths = {
+                'NO.': '50px',  // 添加序号列的宽度
                 '名称': '50px',
                 '合约': '100px',
                 '聪明钱': '100px',
@@ -1050,6 +1131,7 @@
 
             const headerRow = document.createElement('tr');
             const headers = [
+                'NO.',  // 添加序号列
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
                 '买入金额', '卖出金额', '到手利润',
@@ -1164,7 +1246,7 @@
             }
 
             // 创建表体
-            sortedTraders.forEach(trader => {
+            sortedTraders.forEach((trader, index) => {
                 const row = document.createElement('tr');
                 row.className = 'smart-money-row';
                 row.style.cssText = 'border-bottom: 1px solid #ddd;';
@@ -1183,6 +1265,7 @@
                 };
 
                 const rowData = [
+                    (this.currentPage - 1) * this.pageSize + index + 1,  // 添加序号
                     trader.token,
                     trader.ca,
                     trader.address,
