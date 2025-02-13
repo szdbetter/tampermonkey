@@ -198,6 +198,7 @@
                                     { name: 'twitter_username', keyPath: 'twitter_username', options: { unique: false } },
                                     { name: 'user_name', keyPath: 'user_name', options: { unique: false } },
                                     { name: 'realized_profit', keyPath: 'realized_profit', options: { unique: false } },
+                                    { name: 'unrealized_profit', keyPath: 'unrealized_profit', options: { unique: false } },
                                     { name: 'profit_tag', keyPath: 'profit_tag', options: { unique: false } },
                                     { name: 'dev', keyPath: 'dev', options: { unique: false } },
                                     { name: 'create_time', keyPath: 'create_time', options: { unique: false } },
@@ -307,7 +308,7 @@
             this.selectedFields = new Set([
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
-                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润',
+                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润', '未实现利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ]); // 默认全选
         }
@@ -516,19 +517,16 @@
 
                 // 过滤掉低于最低利润阈值的交易者
                 const filteredData = data.filter(item =>
-                    (item.realized_profit || 0) >= CONFIG.MIN_REALIZED_PROFIT
-                );
+                    ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT
+                ).sort((a, b) =>
+                    ((b.realized_profit || 0) + (b.unrealized_profit || 0)) -
+                    ((a.realized_profit || 0) + (a.unrealized_profit || 0))
+                ).slice(0, CONFIG.MAX_TRADERS);
 
-                // 按照realized_profit降序排序
-                filteredData.sort((a, b) => (b.realized_profit || 0) - (a.realized_profit || 0));
-
-                // 只保留前20名（或更少）
-                const topTraders = filteredData.slice(0, CONFIG.MAX_TRADERS);
-
-                DebugLogger.log(`解析到 ${data.length} 条交易数据，过滤后 ${filteredData.length} 条，保留前 ${topTraders.length} 名`, CONFIG.DEBUG_LEVEL.INFO);
+                DebugLogger.log(`解析到 ${data.length} 条交易数据，过滤后 ${filteredData.length} 条，保留前 ${filteredData.length} 名`, CONFIG.DEBUG_LEVEL.INFO);
 
                 // 打印前5条数据的详细信息
-                const previewData = topTraders.slice(0, 5).map((item, index) => ({
+                const previewData = filteredData.slice(0, 5).map((item, index) => ({
                     '排名': index + 1,
                     'Address': item.address,
                     '买入量': Math.round(item.buy_volume_cur || 0),
@@ -542,7 +540,7 @@
                 this.updateProgressBar(70);
 
                 const processedTraders = [];
-                for (const [index, item] of topTraders.entries()) {
+                for (const [index, item] of filteredData.entries()) {
                     // 计算持有时间
                     const startHoldingAtTimestamp = item.start_holding_at * 1000; // 转换为毫秒
                     let holdingPeriod = null;
@@ -575,6 +573,7 @@
                         buy_volume: Math.round(item.buy_volume_cur) || 0,
                         sell_volume: Math.round(item.sell_volume_cur) || 0,
                         realized_profit: Math.round(item.realized_profit) || 0,
+                        unrealized_profit: Math.round(item.unrealized_profit) || 0,
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
                         profit_tag: index + 1, // 使用循环的索引i代替之前未定义的index
@@ -597,7 +596,7 @@
 
                     await this.db.upsertTrader(trader);
                     processedTraders.push(trader);
-                    this.updateProgressBar(70 + (index + 1) / topTraders.length * 30);
+                    this.updateProgressBar(70 + (index + 1) / filteredData.length * 30);
                 }
 
                 // 打印处理的交易者数据
@@ -665,6 +664,7 @@
                             buy_volume: parseInt(row['买入金额'].replace(/,/g, '')),
                             sell_volume: parseInt(row['卖出金额'].replace(/,/g, '')),
                             realized_profit: parseInt(row['实现利润'].replace(/,/g, '')),
+                            unrealized_profit: row['未实现利润'] !== 'N/A' ? parseInt(row['未实现利润'].replace(/,/g, '')) : null,
                             twitter_username: row['Twitter'],
                             user_name: row['用户名'],
                             profit_tag: parseInt(row['利润排名']),
@@ -1167,6 +1167,7 @@
                 '买入金额': '60px',
                 '卖出金额': '60px',
                 '实现利润': '70px',
+                '未实现利润': '70px',
                 'Twitter': '50px',
                 '用户名': '50px',
                 '排名': '30px',
@@ -1202,7 +1203,7 @@
                 'NO.',  // 添加序号列
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
-                '买入金额', '卖出金额', '实现利润',
+                '买入金额', '卖出金额', '实现利润', '未实现利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
@@ -1354,6 +1355,7 @@
                     this.formatNumberWithCommas(trader.buy_volume),
                     this.formatNumberWithCommas(trader.sell_volume),
                     this.formatNumberWithCommas(trader.realized_profit),
+                    trader.unrealized_profit !== undefined ? this.formatNumberWithCommas(trader.unrealized_profit) : 'N/A',
                     trader.twitter_username || 'N/A',
                     trader.user_name || 'N/A',
                     trader.profit_tag || 'N/A',
@@ -1370,7 +1372,7 @@
                         td.dataset.originalValue = cellData;
 
                         // 可编辑的列（除了某些特殊列）
-                        const editableColumns = [0, 3, 15, 16, 18, 19, 20]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
+                        const editableColumns = [ 1, 4, 16, 17, 18, 19, 20]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
 
                         // 处理Twitter链接
                         if (index === 15 && cellData !== 'N/A') {  // Twitter列
@@ -1496,8 +1498,8 @@
                                                     }
                                                     break;
 
-                                                case 15: // Twitter列
-                                                case 16: // 用户名列
+                                                case 16: // Twitter列
+                                                case 17: // 用户名列
                                                     {
                                                         // 获取所有相同address的记录
                                                         const addressIndex = store.index('address');
@@ -1520,9 +1522,9 @@
                                                     }
                                                     break;
 
-                                                case 17: // tag_1
-                                                case 18: // tag_2
-                                                case 19: // tag_3
+                                                case 18: // tag_1
+                                                case 19: // tag_2
+                                                case 20: // tag_3
                                                     {
                                                         addressIndex = store.index('address');
                                                         addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
@@ -1597,7 +1599,7 @@
                         `;
 
                         // 处理利润高亮
-                        if (index === 14) {// realized_profit列
+                        if (index === 14 || index === 15) {// realized_profit或unrealized_profit列
                             const profit = parseFloat(cellData.replace(/,/g, ''));
                             if (!isNaN(profit)) {// 确保转换后是有效数字
                                 if (profit >= 100000) {
@@ -1621,7 +1623,7 @@
                         }
 
                         // 为地址和Dev添加背景色
-                        if (index === 2 && addressColors.has(cellData)) {
+                        if (index === 4 && addressColors.has(cellData)) {
                             td.style.backgroundColor = addressColors.get(cellData);
                         } else if (index === 3 && devColors.has(cellData)) {
                             td.style.backgroundColor = devColors.get(cellData);
@@ -1678,6 +1680,7 @@
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
                     '实现利润': this.formatNumberWithCommas(trader.realized_profit),
+                    '未实现利润': trader.unrealized_profit !== null ? this.formatNumberWithCommas(trader.unrealized_profit) : 'N/A',
                     'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'N/A',
                     '利润排名': trader.profit_tag || 'N/A',
@@ -2024,9 +2027,11 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
 
             // 过滤和处理数据的逻辑
             const filteredData = data.filter(item =>
-                (item.realized_profit || 0) >= CONFIG.MIN_REALIZED_PROFIT
-            ).sort((a, b) => (b.realized_profit || 0) - (a.realized_profit || 0))
-             .slice(0, CONFIG.MAX_TRADERS);
+                ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT
+            ).sort((a, b) =>
+                ((b.realized_profit || 0) + (b.unrealized_profit || 0)) -
+                ((a.realized_profit || 0) + (a.unrealized_profit || 0))
+            ).slice(0, CONFIG.MAX_TRADERS);
 
             const tokenInfo = await this.fetchTokenName(ca);
 
@@ -2064,6 +2069,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     buy_volume: Math.round(item.buy_volume_cur) || 0,
                     sell_volume: Math.round(item.sell_volume_cur) || 0,
                     realized_profit: Math.round(item.realized_profit) || 0,
+                    unrealized_profit: Math.round(item.unrealized_profit) || 0,
                     twitter_username: item.twitter_username || '',
                     user_name: item.name || '',
                     profit_tag: i + 1, // 使用循环的索引i代替之前未定义的index
@@ -2682,7 +2688,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             const allFields = [
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
-                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润',
+                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润', '未实现利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
