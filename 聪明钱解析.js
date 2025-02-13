@@ -306,7 +306,7 @@
             // 添加字段选择配置
             this.selectedFields = new Set([
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
-                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', 
+                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
                 '持有时长(分钟)', '买入金额', '卖出金额', '到手利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ]); // 默认全选
@@ -1107,7 +1107,7 @@
 
             // 定义列宽配置
             const columnWidths = {
-                'NO.': '50px',  // 添加序号列的宽度
+                'NO.': '20px',  // 添加序号列的宽度
                 '名称': '50px',
                 '合约': '100px',
                 '聪明钱': '100px',
@@ -1325,10 +1325,10 @@
                         td.dataset.originalValue = cellData;
 
                         // 可编辑的列（除了某些特殊列）
-                        const editableColumns = [0, 3, 17, 18, 19]; // 名称、Dev、标签1、标签2、标签3
+                        const editableColumns = [0, 3, 18, 19, 20]; // 名称、Dev、标签1、标签2、标签3
 
                         // 处理Twitter链接
-                        if (index === 14 && cellData !== 'N/A') {  // Twitter列
+                        if (index === 15 && cellData !== 'N/A') {  // Twitter列
                             const link = document.createElement('a');
                             link.href = `https://x.com/${cellData}`;
                             link.target = '_blank';
@@ -1528,7 +1528,7 @@
                         `;
 
                         // 处理利润高亮
-                        if (index === 13) {// realized_profit列
+                        if (index === 14) {// realized_profit列
                             const profit = parseFloat(cellData.replace(/,/g, ''));
                             if (!isNaN(profit)) {// 确保转换后是有效数字
                                 if (profit >= 100000) {
@@ -2380,7 +2380,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             // 所有可用字段
             const allFields = [
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
-                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', 
+                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
                 '持有时长(分钟)', '买入金额', '卖出金额', '到手利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
