@@ -7,6 +7,15 @@
 // @match        https://gmgn.ai/defi/quotation/v1/tokens/top_traders/*
 // @grant        GM_xmlhttpRequest
 // @connect      frontend-api-v3.pump.fun
+// @connect      api.memego.ai
+// @connect      chain.fm
+// @connect      gmgn.ai
+// @connect      debot.ai
+// @connect      pump.news
+// @connect      memego.ai
+// @connect      dexscreen.com
+// @connect      api.dexscreener.com
+// @connect      dexscreener.com
 // @require      https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js
 // ==/UserScript==
 
@@ -671,10 +680,21 @@
             closeButton.style.cssText = 'background-color: #f44336; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;';
             closeButton.onclick = () => this.toggleDataViewer();
 
+            // 添加数据源测试按钮
+            const testDataSourceButton = document.createElement('button');
+            testDataSourceButton.textContent = '数据源测试';
+            testDataSourceButton.style.cssText = 'background-color: #9c27b0; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;';
+            
+            // 创建测试窗口
+            testDataSourceButton.onclick = () => {
+                document.body.appendChild(this.createTestWindow());
+            };
+
             buttonContainer.appendChild(importButton);
             buttonContainer.appendChild(fileInput);
             buttonContainer.appendChild(exportButton);
             buttonContainer.appendChild(closeButton);
+            buttonContainer.appendChild(testDataSourceButton);
             this.dataViewerModal.appendChild(buttonContainer);
 
             document.body.appendChild(this.dataViewerModal);
@@ -1224,9 +1244,18 @@
             viewDataButton.textContent = '查看数据库';
             viewDataButton.onclick = () => this.toggleDataViewer();
 
+            // 添加数据源测试按钮
+            const testDataSourceButton = document.createElement('button');
+            testDataSourceButton.textContent = '数据源测试';
+            testDataSourceButton.style.cssText = 'background-color: #9c27b0; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; margin-top: 5px;';
+            testDataSourceButton.onclick = () => {
+                document.body.appendChild(this.createTestWindow());
+            };
+
             container.appendChild(collectButton);
             container.appendChild(debugButton);
             container.appendChild(viewDataButton);
+            container.appendChild(testDataSourceButton);  // 添加到主界面
             document.body.appendChild(container);
         }
 
@@ -1294,6 +1323,168 @@
 
             // 重新插入排序后的行
             rows.forEach(row => tbody.appendChild(row));
+        }
+
+        // 添加createTestWindow作为类方法
+        createTestWindow() {
+            const testWindow = document.createElement('div');
+            testWindow.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 80%;
+                max-width: 800px;
+                background: white;
+                padding: 20px;
+                border-radius: 10px;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                z-index: 10002;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            `;
+
+            // 标题
+            const title = document.createElement('h3');
+            title.textContent = '数据源测试';
+            title.style.cssText = 'margin: 0; color: #333; text-align: center; padding-bottom: 15px; border-bottom: 1px solid #eee;';
+
+            // 输入区域容器
+            const inputContainer = document.createElement('div');
+            inputContainer.style.cssText = 'display: flex; gap: 10px; align-items: center;';
+
+            // API输入框
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = '请输入API地址';
+            input.value = 'https://frontend-api-v3.pump.fun/coins/search';
+            input.style.cssText = `
+                flex: 1;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                font-size: 14px;
+                transition: border-color 0.3s;
+            `;
+            input.onfocus = () => input.style.borderColor = '#9c27b0';
+            input.onblur = () => input.style.borderColor = '#ddd';
+
+            // 查询按钮
+            const queryButton = document.createElement('button');
+            queryButton.textContent = '获取数据';
+            queryButton.style.cssText = `
+                padding: 10px 20px;
+                background: #9c27b0;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                transition: background 0.3s;
+            `;
+            queryButton.onmouseover = () => queryButton.style.background = '#7b1fa2';
+            queryButton.onmouseout = () => queryButton.style.background = '#9c27b0';
+
+            // 结果显示区域
+            const resultArea = document.createElement('div');
+            resultArea.style.cssText = `
+                margin-top: 15px;
+                padding: 15px;
+                border: 1px solid #eee;
+                border-radius: 5px;
+                max-height: 400px;
+                overflow-y: auto;
+                background: #f8f9fa;
+                font-family: monospace;
+                font-size: 14px;
+                white-space: pre-wrap;
+                word-break: break-all;
+            `;
+
+            // 关闭按钮
+            const closeBtn = document.createElement('button');
+            closeBtn.textContent = '×';
+            closeBtn.style.cssText = `
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background: none;
+                border: none;
+                font-size: 24px;
+                cursor: pointer;
+                color: #666;
+                padding: 5px;
+                line-height: 1;
+            `;
+            closeBtn.onclick = () => document.body.removeChild(testWindow);
+
+            // 查询按钮点击事件
+            queryButton.onclick = () => {
+                resultArea.textContent = '正在获取数据...';
+                resultArea.style.color = '#666';
+
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: input.value,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                        'Accept': 'application/json, text/plain, */*',
+                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                        'Origin': 'https://gmgn.ai',
+                        'Referer': 'https://gmgn.ai/',
+                        'Sec-Fetch-Dest': 'empty',
+                        'Sec-Fetch-Mode': 'cors',
+                        'Sec-Fetch-Site': 'cross-site'
+                    },
+                    onload: (response) => {
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            resultArea.innerHTML = `<span style="color: #4CAF50;">✓ 获取成功</span>
+<strong>状态码:</strong> ${response.status}
+<strong>响应头:</strong>
+${response.responseHeaders}
+
+<strong>原始响应内容:</strong>
+${response.responseText}
+
+<strong>解析后的JSON数据:</strong>
+${JSON.stringify(data, null, 2)}`;
+                        } catch (error) {
+                            resultArea.innerHTML = `<span style="color: #f44336;">✗ 数据解析错误</span>
+<strong>错误详情:</strong> ${error.toString()}
+<strong>错误堆栈:</strong>
+${error.stack || '无堆栈信息'}
+
+<strong>状态码:</strong> ${response.status}
+<strong>响应头:</strong>
+${response.responseHeaders}
+
+<strong>原始响应内容:</strong>
+${response.responseText}`;
+                        }
+                    },
+                    onerror: (error) => {
+                        resultArea.innerHTML = `<span style="color: #f44336;">✗ 请求失败</span>
+<strong>错误详情:</strong> ${error.toString()}
+<strong>错误信息:</strong> ${error.message || '未知错误'}
+<strong>错误堆栈:</strong>
+${error.stack || '无堆栈信息'}
+
+<strong>完整错误对象:</strong>
+${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
+                    }
+                });
+            };
+
+            // 组装界面
+            inputContainer.appendChild(input);
+            inputContainer.appendChild(queryButton);
+            testWindow.appendChild(closeBtn);
+            testWindow.appendChild(title);
+            testWindow.appendChild(inputContainer);
+            testWindow.appendChild(resultArea);
+
+            return testWindow;
         }
     }
 
