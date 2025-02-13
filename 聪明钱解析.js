@@ -2141,6 +2141,18 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 cursor: pointer;
             `;
 
+            // 添加GMGN 24H热点按钮
+            const gmgnHotButton = document.createElement('button');
+            gmgnHotButton.textContent = 'GMGN 24H热点';
+            gmgnHotButton.style.cssText = `
+                padding: 10px 20px;
+                background: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            `;
+
             // 右侧状态显示区域
             const rightPanel = document.createElement('div');
             rightPanel.style.cssText = `
@@ -2173,8 +2185,204 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 border-radius: 5px;
             `;
 
+            // GMGN热点数据表格容器
+            const gmgnTableContainer = document.createElement('div');
+            gmgnTableContainer.style.cssText = `
+                display: none;
+                margin-top: 10px;
+                max-height: 500px;
+                overflow-y: auto;
+            `;
+
+            // 格式化数字为K/M单位
+            const formatNumber = (num) => {
+                if (num >= 1000000) {
+                    return (num / 1000000).toFixed(2) + 'M';
+                } else if (num >= 1000) {
+                    return (num / 1000).toFixed(2) + 'K';
+                }
+                return num.toString();
+            };
+
+            // 创建GMGN热点数据表格
+            const createGmgnTable = (data) => {
+                const table = document.createElement('table');
+                table.style.cssText = `
+                    width: 100%;
+                    border-collapse: collapse;
+                    margin-top: 10px;
+                `;
+
+                // 表头
+                const thead = document.createElement('thead');
+                thead.innerHTML = `
+                    <tr>
+                        <th style="width: 30px;"><input type="checkbox" id="selectAll"></th>
+                        <th style="width: 50px;">NO.</th>
+                        <th style="width: 50px;">Logo</th>
+                        <th style="width: 100px;">名称</th>
+                        <th style="width: 200px;">CA</th>
+                        <th style="width: 100px;">持有人</th>
+                        <th style="width: 100px;">市值</th>
+                        <th style="width: 100px;">VOL</th>
+                    </tr>
+                `;
+                thead.style.cssText = `
+                    background: #f5f5f5;
+                    position: sticky;
+                    top: 0;
+                `;
+
+                // 表体
+                const tbody = document.createElement('tbody');
+                const filteredData = data.filter(item => 
+                    item.holder_count > 3000 && item.market_cap > 1000000
+                );
+
+                filteredData.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><input type="checkbox" class="tokenCheckbox" data-ca="${item.address}"></td>
+                        <td>${index + 1}</td>
+                        <td><img src="${item.logo}" style="width: 24px; height: 24px; border-radius: 12px;"></td>
+                        <td>${item.symbol}</td>
+                        <td>${item.address}</td>
+                        <td>${item.holder_count.toLocaleString()}</td>
+                        <td>${formatNumber(item.market_cap)}</td>
+                        <td>${formatNumber(item.volume)}</td>
+                    `;
+                    row.style.cssText = 'border-bottom: 1px solid #eee;';
+                    tbody.appendChild(row);
+                });
+
+                table.appendChild(thead);
+                table.appendChild(tbody);
+
+                // 全选/取消全选功能
+                const selectAllCheckbox = table.querySelector('#selectAll');
+                selectAllCheckbox.onchange = (e) => {
+                    const checkboxes = table.querySelectorAll('.tokenCheckbox');
+                    checkboxes.forEach(cb => cb.checked = e.target.checked);
+                };
+
+                return table;
+            };
+
+            // GMGN热点按钮点击事件
+            gmgnHotButton.onclick = async () => {
+                try {
+                    gmgnHotButton.disabled = true;
+                    gmgnHotButton.textContent = '加载中...';
+                    statusContainer.innerHTML = '正在获取GMGN 24H热点数据...';
+
+                    const response = await new Promise((resolve, reject) => {
+                        GM_xmlhttpRequest({
+                            method: 'GET',
+                            url: 'https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/24h?orderby=marketcap&direction=desc&filters[]=renounced&filters[]=frozen',
+                            headers: {
+                                'Accept': 'application/json',
+                                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                                'Origin': 'https://gmgn.ai',
+                                'Referer': 'https://gmgn.ai/',
+                                'Sec-Fetch-Dest': 'empty',
+                                'Sec-Fetch-Mode': 'cors',
+                                'Sec-Fetch-Site': 'cross-site'
+                            },
+                            onload: (response) => {
+                                try {
+                                    const contentType = response.responseHeaders.match(/content-type:\s*(.*?)(?:\r\n|\r|\n|$)/i);
+                                    if (contentType && contentType[1].includes('application/json')) {
+                                        resolve(response);
+                                    } else {
+                                        DebugLogger.log(`API返回的不是JSON格式: ${contentType ? contentType[1] : '未知类型'}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                        reject(new Error('API返回的不是JSON格式'));
+                                    }
+                                } catch (error) {
+                                    reject(error);
+                                }
+                            },
+                            onerror: (error) => reject(error)
+                        });
+                    });
+
+                    const responseData = JSON.parse(response.responseText);
+                    
+                    // 添加详细的数据结构检查和错误报告
+                    if (typeof responseData !== 'object') {
+                        throw new Error(`返回数据不是对象，而是 ${typeof responseData}`);
+                    }
+                    
+                    if (responseData.code !== 0) {
+                        throw new Error(`API返回错误代码: ${responseData.code}, 消息: ${responseData.msg}`);
+                    }
+                    
+                    if (!responseData.data) {
+                        throw new Error('返回数据缺少 data 字段');
+                    }
+                    
+                    if (!responseData.data.rank || !Array.isArray(responseData.data.rank)) {
+                        throw new Error(`data.rank 不是数组: ${JSON.stringify(responseData.data)}`);
+                    }
+                    
+                    DebugLogger.log(`成功获取数据：总计 ${responseData.data.rank.length} 条记录`, CONFIG.DEBUG_LEVEL.INFO);
+                    
+                    // 使用 data.rank 作为数据源
+                    const data = responseData.data.rank;
+
+                    // 过滤数据
+                    const filteredData = data.filter(item => 
+                        item.holder_count > 3000 && 
+                        item.market_cap > 1000000
+                    );
+
+                    DebugLogger.log(`过滤后剩余 ${filteredData.length} 条记录`, CONFIG.DEBUG_LEVEL.INFO);
+
+                    gmgnTableContainer.style.display = 'block';
+                    gmgnTableContainer.innerHTML = '';
+                    gmgnTableContainer.appendChild(createGmgnTable(filteredData));
+
+                    // 添加批量采集按钮
+                    const batchCollectSelectedButton = document.createElement('button');
+                    batchCollectSelectedButton.textContent = '采集选中项';
+                    batchCollectSelectedButton.style.cssText = `
+                        margin-top: 10px;
+                        padding: 10px 20px;
+                        background: #4CAF50;
+                        color: white;
+                        border: none;
+                        border-radius: 5px;
+                        cursor: pointer;
+                    `;
+
+                    batchCollectSelectedButton.onclick = () => {
+                        const selectedCAs = Array.from(gmgnTableContainer.querySelectorAll('.tokenCheckbox:checked'))
+                            .map(cb => cb.dataset.ca);
+                        
+                        if (selectedCAs.length === 0) {
+                            alert('请至少选择一个代币');
+                            return;
+                        }
+
+                        textarea.value = selectedCAs.join('\n');
+                        gmgnTableContainer.style.display = 'none';
+                        statusContainer.innerHTML = '';
+                    };
+
+                    gmgnTableContainer.appendChild(batchCollectSelectedButton);
+                    statusContainer.innerHTML = '数据加载完成，请选择要采集的代币';
+
+                } catch (error) {
+                    statusContainer.innerHTML = `获取数据失败: ${error.message}`;
+                    console.error('GMGN数据获取失败:', error);
+                } finally {
+                    gmgnHotButton.disabled = false;
+                    gmgnHotButton.textContent = 'GMGN 24H热点';
+                }
+            };
+
             // 组装UI
             buttonContainer.appendChild(startButton);
+            buttonContainer.appendChild(gmgnHotButton);
             buttonContainer.appendChild(closeButton);
 
             leftPanel.appendChild(title);
@@ -2184,6 +2392,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             rightPanel.appendChild(statusTitle);
             rightPanel.appendChild(statusContainer);
             rightPanel.appendChild(summaryContainer);
+            rightPanel.appendChild(gmgnTableContainer);
 
             modal.appendChild(leftPanel);
             modal.appendChild(rightPanel);
