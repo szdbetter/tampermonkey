@@ -2119,8 +2119,8 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 top: 50%;
                 left: 50%;
                 transform: translate(-50%, -50%);
-                width: 80%;
-                max-width: 1200px;
+                width: 90%;
+                max-width: 1800px;
                 background: white;
                 padding: 20px;
                 border-radius: 10px;
@@ -2128,13 +2128,14 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 z-index: 10002;
                 display: flex;
                 gap: 20px;
+                font-size:13px;
             `;
 
             // 左侧输入区域
             const leftPanel = document.createElement('div');
             leftPanel.style.cssText = `
-                flex: 2;
-                min-width: 600px;
+                flex:1 ;
+                min-width: 300px;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
@@ -2154,6 +2155,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 border-radius: 5px;
                 resize: none;
                 font-family: monospace;
+                font-size:13px;
             `;
 
             const buttonContainer = document.createElement('div');
@@ -2196,7 +2198,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             // 右侧状态显示区域
             const rightPanel = document.createElement('div');
             rightPanel.style.cssText = `
-                flex: 1;
+                flex: 3;
                 border-left: 1px solid #eee;
                 padding-left: 20px;
                 display: flex;
@@ -2244,6 +2246,24 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 return num.toString();
             };
 
+            // 格式化时间为"xx分钟/xx小时/xx天前"
+            const formatTimeAgo = (timestamp) => {
+                if (!timestamp) return 'N/A';
+                const now = Math.floor(Date.now() / 1000);
+                const diff = now - timestamp;
+
+                if (diff < 3600) {
+                    const minutes = Math.floor(diff / 60);
+                    return `${minutes}分钟前`;
+                } else if (diff < 86400) {
+                    const hours = Math.floor(diff / 3600);
+                    return `${hours}小时前`;
+                } else {
+                    const days = Math.floor(diff / 86400);
+                    return `${days}天前`;
+                }
+            };
+
             // 创建GMGN热点数据表格
             const createGmgnTable = (data) => {
                 const table = document.createElement('table');
@@ -2265,6 +2285,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                         <th style="width: 100px;">持有人</th>
                         <th style="width: 100px;">市值</th>
                         <th style="width: 100px;">VOL</th>
+                        <th style="width: 100px;">创建时间</th>
                     </tr>
                 `;
                 thead.style.cssText = `
@@ -2275,7 +2296,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
 
                 // 表体
                 const tbody = document.createElement('tbody');
-                const filteredData = data.filter(item => 
+                const filteredData = data.filter(item =>
                     item.holder_count > 3000 && item.market_cap > 1000000
                 );
 
@@ -2290,6 +2311,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                         <td>${item.holder_count.toLocaleString()}</td>
                         <td>${formatNumber(item.market_cap)}</td>
                         <td>${formatNumber(item.volume)}</td>
+                        <td>${formatTimeAgo(item.pool_creation_timestamp)}</td>
                     `;
                     row.style.cssText = 'border-bottom: 1px solid #eee;';
                     tbody.appendChild(row);
@@ -2346,32 +2368,32 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     });
 
                     const responseData = JSON.parse(response.responseText);
-                    
+
                     // 添加详细的数据结构检查和错误报告
                     if (typeof responseData !== 'object') {
                         throw new Error(`返回数据不是对象，而是 ${typeof responseData}`);
                     }
-                    
+
                     if (responseData.code !== 0) {
                         throw new Error(`API返回错误代码: ${responseData.code}, 消息: ${responseData.msg}`);
                     }
-                    
+
                     if (!responseData.data) {
                         throw new Error('返回数据缺少 data 字段');
                     }
-                    
+
                     if (!responseData.data.rank || !Array.isArray(responseData.data.rank)) {
                         throw new Error(`data.rank 不是数组: ${JSON.stringify(responseData.data)}`);
                     }
-                    
+
                     DebugLogger.log(`成功获取数据：总计 ${responseData.data.rank.length} 条记录`, CONFIG.DEBUG_LEVEL.INFO);
-                    
+
                     // 使用 data.rank 作为数据源
                     const data = responseData.data.rank;
 
                     // 过滤数据
-                    const filteredData = data.filter(item => 
-                        item.holder_count > 3000 && 
+                    const filteredData = data.filter(item =>
+                        item.holder_count > 3000 &&
                         item.market_cap > 1000000
                     );
 
@@ -2397,7 +2419,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     batchCollectSelectedButton.onclick = () => {
                         const selectedCAs = Array.from(gmgnTableContainer.querySelectorAll('.tokenCheckbox:checked'))
                             .map(cb => cb.dataset.ca);
-                        
+
                         if (selectedCAs.length === 0) {
                             alert('请至少选择一个代币');
                             return;
