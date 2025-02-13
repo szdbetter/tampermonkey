@@ -307,7 +307,7 @@
             this.selectedFields = new Set([
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
-                '持有时长(分钟)', '买入金额', '卖出金额', '到手利润',
+                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ]); // 默认全选
         }
@@ -664,7 +664,7 @@
                             holding_period: row['持有时长(分钟)'] !== 'N/A' ? parseInt(row['持有时长(分钟)']) : null,
                             buy_volume: parseInt(row['买入金额'].replace(/,/g, '')),
                             sell_volume: parseInt(row['卖出金额'].replace(/,/g, '')),
-                            realized_profit: parseInt(row['到手利润'].replace(/,/g, '')),
+                            realized_profit: parseInt(row['实现利润'].replace(/,/g, '')),
                             twitter_username: row['Twitter'],
                             user_name: row['用户名'],
                             profit_tag: parseInt(row['利润排名']),
@@ -752,7 +752,7 @@
             // 添加查询类型选择
             const queryTypeSelect = document.createElement('select');
             queryTypeSelect.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd;';
-            ['名称', '合约', '聪明钱', 'Dev'].forEach(type => {
+            ['聪明钱', '名称', '合约', 'Dev'].forEach(type => {
                 const option = document.createElement('option');
                 option.value = type;
                 option.textContent = type;
@@ -764,6 +764,12 @@
             queryInput.type = 'text';
             queryInput.placeholder = '请输入查询内容';
             queryInput.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd; flex-grow: 1;';
+            // 添加回车触发查询功能
+            queryInput.onkeypress = (e) => {
+                if (e.key === 'Enter') {
+                    this.loadAndDisplayData(queryTypeSelect.value, queryInput.value);
+                }
+            };
 
             // 添加查询按钮
             const queryButton = document.createElement('button');
@@ -1160,7 +1166,7 @@
                 '持有时长(分钟)': '100px',
                 '买入金额': '60px',
                 '卖出金额': '60px',
-                '到手利润': '70px',
+                '实现利润': '70px',
                 'Twitter': '50px',
                 '用户名': '50px',
                 '排名': '30px',
@@ -1196,7 +1202,7 @@
                 'NO.',  // 添加序号列
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
-                '买入金额', '卖出金额', '到手利润',
+                '买入金额', '卖出金额', '实现利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
@@ -1364,7 +1370,7 @@
                         td.dataset.originalValue = cellData;
 
                         // 可编辑的列（除了某些特殊列）
-                        const editableColumns = [0, 3, 18, 19, 20]; // 名称、Dev、标签1、标签2、标签3
+                        const editableColumns = [0, 3, 15, 16, 18, 19, 20]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
 
                         // 处理Twitter链接
                         if (index === 15 && cellData !== 'N/A') {  // Twitter列
@@ -1490,13 +1496,37 @@
                                                     }
                                                     break;
 
+                                                case 15: // Twitter列
+                                                case 16: // 用户名列
+                                                    {
+                                                        // 获取所有相同address的记录
+                                                        const addressIndex = store.index('address');
+                                                        const addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
+
+                                                        addressRequest.onsuccess = async () => {
+                                                            const tradersWithSameAddress = addressRequest.result;
+                                                            for (const trader of tradersWithSameAddress) {
+                                                                if (index === 15) {
+                                                                    trader.twitter_username = newValue;
+                                                                } else {
+                                                                    trader.user_name = newValue;
+                                                                }
+                                                                await store.put(trader);
+                                                            }
+                                                            DebugLogger.log(`批量更新${index === 15 ? 'Twitter' : '用户名'}成功: ${tradersWithSameAddress.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+                                                            // 刷新表格显示
+                                                            this.loadAndDisplayData();
+                                                        };
+                                                    }
+                                                    break;
+
                                                 case 17: // tag_1
                                                 case 18: // tag_2
                                                 case 19: // tag_3
                                                     {
                                                         addressIndex = store.index('address');
                                                         addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
-                                                        tagField = index === 17 ? 'tag_1' : (index === 18 ? 'tag_2' : 'tag_3');
+                                                        tagField = index === 18 ? 'tag_1' : (index === 19 ? 'tag_2' : 'tag_3');
 
                                                         addressRequest.onsuccess = async () => {
                                                             const tradersWithSameAddress = addressRequest.result;
@@ -1647,7 +1677,7 @@
 
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
-                    '到手利润': this.formatNumberWithCommas(trader.realized_profit),
+                    '实现利润': this.formatNumberWithCommas(trader.realized_profit),
                     'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'N/A',
                     '利润排名': trader.profit_tag || 'N/A',
@@ -2652,7 +2682,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             const allFields = [
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
-                '持有时长(分钟)', '买入金额', '卖出金额', '到手利润',
+                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润',
                 'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
