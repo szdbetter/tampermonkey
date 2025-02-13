@@ -353,34 +353,37 @@
 
         async fetchTokenName(ca) {
             try {
-                return new Promise((resolve, reject) => {
-                    DebugLogger.log(`正在获取代币名称: ${ca}`);
-                    GM_xmlhttpRequest({
-                        method: 'GET',
-                        url: `${CONFIG.API.TOKEN_SEARCH_URL}?offset=${CONFIG.API.SEARCH_PARAMS.offset}&limit=${CONFIG.API.SEARCH_PARAMS.limit}&sort=${CONFIG.API.SEARCH_PARAMS.sort}&includeNsfw=${CONFIG.API.SEARCH_PARAMS.includeNsfw}&order=${CONFIG.API.SEARCH_PARAMS.order}&searchTerm=${ca}&type=exact`,
-                        onload: (response) => {
-                            try {
-                                const data = JSON.parse(response.responseText);
-                                if (data && data.length > 0) {
-                                    const tokenInfo = data[0];
-                                    DebugLogger.log(`获取代币信息成功: ${JSON.stringify(tokenInfo)}`, CONFIG.DEBUG_LEVEL.INFO);
-                                    DebugLogger.logTable([{
-                                        'CA': tokenInfo.mint,
-                                        'Symbol': tokenInfo.symbol,
-                                        'Name': tokenInfo.name,
-                                        'Dev': tokenInfo.creator,
-                                        '最后交易时间': new Date(tokenInfo.last_trade_timestamp).toLocaleString()
-                                    }], '代币详细信息');
-
-                                    // 返回一个包含更多信息的对象
-                                    resolve({
-                                        symbol: tokenInfo.symbol || 'Unknown Token',
-                                        dev: tokenInfo.creator,
-                                        created_timestamp: tokenInfo.created_timestamp,
-                                        launch_time: tokenInfo.last_trade_timestamp
-                                    });
-                                } else {
-                                    DebugLogger.log('未找到代币名称', CONFIG.DEBUG_LEVEL.WARNING);
+                // 检查CA是否以pump结尾
+                if (ca.toLowerCase().endsWith('pump')) {
+                    // 使用现有的PUMP.fun API
+                    return new Promise((resolve, reject) => {
+                        DebugLogger.log(`使用PUMP.fun API获取代币名称: ${ca}`);
+                        GM_xmlhttpRequest({
+                            method: 'GET',
+                            url: `${CONFIG.API.TOKEN_SEARCH_URL}?offset=${CONFIG.API.SEARCH_PARAMS.offset}&limit=${CONFIG.API.SEARCH_PARAMS.limit}&sort=${CONFIG.API.SEARCH_PARAMS.sort}&includeNsfw=${CONFIG.API.SEARCH_PARAMS.includeNsfw}&order=${CONFIG.API.SEARCH_PARAMS.order}&searchTerm=${ca}&type=exact`,
+                            onload: (response) => {
+                                try {
+                                    const data = JSON.parse(response.responseText);
+                                    if (data && data.length > 0) {
+                                        const tokenInfo = data[0];
+                                        DebugLogger.log(`PUMP.fun API获取代币信息成功: ${JSON.stringify(tokenInfo)}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        resolve({
+                                            symbol: tokenInfo.symbol || 'Unknown Token',
+                                            dev: tokenInfo.creator,
+                                            created_timestamp: tokenInfo.created_timestamp,
+                                            launch_time: tokenInfo.last_trade_timestamp
+                                        });
+                                    } else {
+                                        DebugLogger.log('PUMP.fun API未找到代币名称', CONFIG.DEBUG_LEVEL.WARNING);
+                                        resolve({
+                                            symbol: 'Unknown Token',
+                                            dev: '',
+                                            created_timestamp: null,
+                                            launch_time: null
+                                        });
+                                    }
+                                } catch (error) {
+                                    DebugLogger.log(`PUMP.fun API解析代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                                     resolve({
                                         symbol: 'Unknown Token',
                                         dev: '',
@@ -388,22 +391,58 @@
                                         launch_time: null
                                     });
                                 }
-                            } catch (error) {
-                                DebugLogger.log(`解析代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
-                                resolve({
-                                    symbol: 'Unknown Token',
-                                    dev: '',
-                                    created_timestamp: null,
-                                    launch_time: null
-                                });
+                            },
+                            onerror: (error) => {
+                                DebugLogger.log(`PUMP.fun API获取代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                reject(error);
                             }
-                        },
-                        onerror: (error) => {
-                            DebugLogger.log(`获取代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
-                            reject(error);
-                        }
+                        });
                     });
-                });
+                } else {
+                    // 使用 DexScreener API
+                    return new Promise((resolve, reject) => {
+                        DebugLogger.log(`使用DexScreener API获取代币名称: ${ca}`);
+                        GM_xmlhttpRequest({
+                            method: 'GET',
+                            url: `https://api.dexscreener.com/latest/dex/tokens/${ca}`,
+                            onload: (response) => {
+                                try {
+                                    const data = JSON.parse(response.responseText);
+                                    if (data && data.pairs && data.pairs.length > 0) {
+                                        const tokenInfo = data.pairs[0].baseToken;
+                                        DebugLogger.log(`DexScreener API获取代币信息成功: ${JSON.stringify(tokenInfo)}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        resolve({
+                                            symbol: tokenInfo.symbol || 'Unknown Token',
+                                            dev: '', // DexScreener API 没有提供 dev 信息
+                                            created_timestamp: data.pairs[0].pairCreatedAt,
+                                            launch_time: data.pairs[0].pairCreatedAt
+                                        });
+                                    } else {
+                                        DebugLogger.log('DexScreener API未找到代币名称', CONFIG.DEBUG_LEVEL.WARNING);
+                                        resolve({
+                                            symbol: 'Unknown Token',
+                                            dev: '',
+                                            created_timestamp: null,
+                                            launch_time: null
+                                        });
+                                    }
+                                } catch (error) {
+                                    DebugLogger.log(`DexScreener API解析代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                    resolve({
+                                        symbol: 'Unknown Token',
+                                        dev: '',
+                                        created_timestamp: null,
+                                        launch_time: null
+                                    });
+                                }
+                            },
+                            onerror: (error) => {
+                                DebugLogger.log(`DexScreener API获取代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                reject(error);
+                            }
+                        });
+                    });
+                }
             } catch (error) {
                 DebugLogger.log(`获取代币名称请求失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                 return {
@@ -2094,7 +2133,8 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             // 左侧输入区域
             const leftPanel = document.createElement('div');
             leftPanel.style.cssText = `
-                flex: 1;
+                flex: 2;
+                min-width: 600px;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
