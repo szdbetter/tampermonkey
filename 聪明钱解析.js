@@ -60,13 +60,13 @@
                 position: fixed;
                 bottom: 10px;
                 right: 10px;
-                width: 450px;
-                max-height: 450px;
+                width: 405px;
+                max-height: 405px;
                 overflow-y: auto;
                 background: rgba(0,0,0,0.8);
                 color: #0f0;
                 padding: 15px;
-                font-size: 18px;
+                font-size: 16px;
                 z-index: 10000;
                 border-radius: 10px;
                 line-height: 1.5;
@@ -297,6 +297,10 @@
             this.tokenName = '';
             this.progressBar = null;
             this.dataViewerModal = null;
+            this.pageSize = 100; // 每页显示100条记录
+            this.currentPage = 1;
+            this.totalPages = 1;
+            this.performanceMonitor = new PerformanceMonitor();
         }
 
         createProgressBar() {
@@ -525,21 +529,14 @@
                         realized_profit: Math.round(item.realized_profit) || 0,
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
-                        profit_tag: index + 1,
-
-                        // 新增tag字段，初始值为空字符串
+                        profit_tag: index + 1, // 使用循环的索引i代替之前未定义的index
                         tag_1: '',
                         tag_2: '',
                         tag_3: '',
-
                         update_time: this.getBeijingTime(),
-
-                        // 新增字段
                         dev: this.tokenName.dev,
                         create_time: this.tokenName.created_timestamp,
                         launch_time: this.tokenName.launch_time ? new Date(this.tokenName.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
-
-                        // 新增的字段
                         sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
                         last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
                         start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
@@ -547,8 +544,6 @@
                             ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
                             : null,
                         holding_period: holdingPeriod,
-
-                        // 新增 buy_after_launch_interval 字段
                         buy_after_launch_interval: buyAfterLaunchInterval
                     };
 
@@ -822,534 +817,658 @@
          * @param {string} queryType 查询类型
          * @param {string} queryValue 查询值
          */
-        loadAndDisplayData(queryType = '', queryValue = '') {
+        async loadAndDisplayData(queryType = '', queryValue = '') {
             const tableContainer = this.dataViewerModal.children[2];
+            const endTimer = this.performanceMonitor.startTimer('loadData');
 
             // 添加加载提示
             tableContainer.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
+                <div class="loading-indicator" style="text-align: center; padding: 20px;">
                     <div style="font-size: 16px; color: #666;">正在加载数据...</div>
                 </div>
             `;
 
             try {
+                DebugLogger.log('开始加载数据...', 'info');
                 const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
                 const store = transaction.objectStore(this.db.storeName);
-                const request = store.getAll();
-
-                request.onerror = (event) => {
-                    tableContainer.innerHTML = `
-                        <div style="text-align: center; padding: 20px; color: #f44336;">
-                            <div>数据加载失败: ${event.target.error}</div>
-                            <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px;">刷新页面</button>
-                        </div>
-                    `;
-                    console.error('数据库查询失败:', event.target.error);
+                
+                // 首先获取总记录数
+                const countRequest = store.count();
+                
+                countRequest.onerror = (event) => {
+                    const error = `获取记录数失败: ${event.target.error}`;
+                    DebugLogger.log(error, 'error');
+                    throw new Error(error);
                 };
 
-                request.onsuccess = (event) => {
-                    const traders = event.target.result;
+                countRequest.onsuccess = (event) => {
+                    try {
+                        const totalRecords = event.target.result;
+                        DebugLogger.log(`总记录数: ${totalRecords}`, 'info');
+                        this.totalPages = Math.ceil(totalRecords / this.pageSize);
 
-                    if (!traders || traders.length === 0) {
-                        tableContainer.innerHTML = `
-                            <div style="text-align: center; padding: 20px; color: #666;">
-                                <div>暂无数据记录</div>
-                                <div style="font-size: 14px; margin-top: 10px;">
-                                    请先使用"采集数据"按钮收集数据
-                                </div>
-                            </div>
-                        `;
-                        return;
-                    }
+                        // 获取当前页的数据
+                        const offset = (this.currentPage - 1) * this.pageSize;
+                        const cursorRequest = store.openCursor();
+                        const pageData = [];
+                        let count = 0;
 
-                    // 创建表格
-                    const table = document.createElement('table');
-                    table.style.cssText = 'width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px;';
-
-                    // 定义列宽配置
-                    const columnWidths = {
-                        '名称': '50px',
-                        '合约': '100px',
-                        '聪明钱': '100px',
-                        'Dev': '100px',
-                        'Pump内盘发射': '120px',
-                        'SOL余额': '80px',
-                        '最后活跃时间': '120px',
-                        '买入时间': '120px',
-                        '卖出时间': '120px',
-                        'Pump到买入(秒)': '100px',
-                        '持有时长(分钟)': '100px',
-                        '买入金额': '60px',
-                        '卖出金额': '60px',
-                        '到手利润': '70px',
-                        'Twitter': '50px',
-                        '用户名': '50px',
-                        '排名': '30px',
-                        '标签1': '50px',
-                        '标签2': '50px',
-                        '标签3': '50px',
-
-                        '更新时间': '120px'
-                    };
-
-                    // 创建表头
-                    const thead = document.createElement('thead');
-                    thead.style.cssText = 'background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;';
-
-                    // 添加必要的样式
-                    const styleSheet = document.createElement('style');
-                    styleSheet.textContent = `
-                        .smart-money-row {
-                            transition: background-color 0.2s ease;
-                        }
-                        .smart-money-row:hover {
-                            background-color: #f5f5f5;
-                        }
-                        .smart-money-row.selected {
-                            background-color: #e8f5e9;
-                            border-left: 4px solid #4CAF50;
-                        }
-                    `;
-                    document.head.appendChild(styleSheet);
-
-                    const headerRow = document.createElement('tr');
-                    const headers = [
-                        '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
-                        'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
-                        '买入金额', '卖出金额', '到手利润',
-                        'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
-                    ];
-
-                    headers.forEach((headerText, index) => {
-                        const th = document.createElement('th');
-                        th.textContent = headerText;
-                        th.style.cssText = `
-                            border: 1px solid #ddd;
-                            padding: 8px;
-                            text-align: left;
-                            font-size: 14px;
-                            background-color: #f2f2f2;
-                            cursor: pointer;
-                            width: ${columnWidths[headerText]};
-                            position: relative;
-                            user-select: none;
-                            white-space: nowrap;
-                            overflow: hidden;
-                            text-overflow: ellipsis;
-                        `;
-
-                        // 添加排序点击事件
-                        th.onclick = () => this.sortTableByColumn(table, index);
-
-                        // 添加拖拽调整宽度功能
-                        const resizer = document.createElement('div');
-                        resizer.style.cssText = `
-                            width: 5px;
-                            height: 100%;
-                            background: #0000;
-                            position: absolute;
-                            right: 0;
-                            top: 0;
-                            cursor: col-resize;
-                        `;
-                        resizer.addEventListener('mousedown', (e) => this.initColumnResize(e, th));
-                        th.appendChild(resizer);
-
-                        headerRow.appendChild(th);
-                    });
-                    thead.appendChild(headerRow);
-                    table.appendChild(thead);
-
-                    // 创建表体
-                    const tbody = document.createElement('tbody');
-
-                    // 根据查询条件过滤数据
-                    let filteredTraders = traders;
-                    if (queryType && queryValue) {
-                        const queryMap = {
-                            '名称': 'name',
-                            '合约': 'ca',
-                            '聪明钱': 'address',
-                            'Dev': 'dev'
-                        };
-                        const field = queryMap[queryType];
-                        filteredTraders = traders.filter(trader =>
-                            String(trader[field]).toLowerCase().includes(queryValue.toLowerCase())
-                        );
-                    }
-
-                    // 生成地址和Dev的颜色映射
-                    const addressColors = new Map();
-                    const devColors = new Map();
-                    const usedColors = new Set();
-                    const colors = [
-                        '#FFB6C1', '#98FB98', '#87CEFA', '#DDA0DD', '#F0E68C',
-                        '#E6E6FA', '#FFA07A', '#98FF98', '#B0E0E6', '#FFB6C1',
-                        '#FFDAB9', '#B0C4DE', '#F0FFF0', '#FFF0F5', '#F5F5DC'
-                    ];
-
-                    // 为重复的地址分配颜色
-                    filteredTraders.forEach(trader => {
-                        if (trader.address && !addressColors.has(trader.address)) {
-                            const sameAddresses = filteredTraders.filter(t => t.address === trader.address);
-                            if (sameAddresses.length > 1) {
-                                let color;
-                                do {
-                                    color = colors[Math.floor(Math.random() * colors.length)];
-                                } while (usedColors.has(color));
-                                usedColors.add(color);
-                                addressColors.set(trader.address, color);
-                            }
-                        }
-                    });
-
-                    // 为重复的Dev分配颜色
-                    filteredTraders.forEach(trader => {
-                        if (trader.dev && !devColors.has(trader.dev)) {
-                            const sameDevs = filteredTraders.filter(t => t.dev === trader.dev);
-                            if (sameDevs.length > 1) {
-                                let color;
-                                do {
-                                    color = colors[Math.floor(Math.random() * colors.length)];
-                                } while (usedColors.has(color));
-                                usedColors.add(color);
-                                devColors.set(trader.dev, color);
-                            }
-                        }
-                    });
-
-                    // 按照更新时间倒序、合约和profit_tag顺序排序
-                    const sortedTraders = filteredTraders.sort((a, b) => {
-                        const timeComparison = new Date(b.update_time) - new Date(a.update_time);
-                        if (timeComparison !== 0) return timeComparison;
-                        const caComparison = a.ca.localeCompare(b.ca);
-                        if (caComparison !== 0) return caComparison;
-                        return (a.profit_tag || 0) - (b.profit_tag || 0);
-                    });
-
-                    // 更新标题显示查询结果数量和代币数量
-                    const title = this.dataViewerModal.children[0];
-                    const totalCount = traders.length;
-                    const filteredCount = sortedTraders.length;
-                    const uniqueTokens = new Set(sortedTraders.map(trader => trader.token));
-                    const tokenCount = uniqueTokens.size;
-                    const totalUniqueTokens = new Set(traders.map(trader => trader.token)).size;
-
-                    title.textContent = queryValue ?
-                        `聪明钱数据库 (查询到 ${filteredCount} 条记录，${tokenCount}个代币，总计${totalCount}条记录，${totalUniqueTokens}个代币)` :
-                        `聪明钱数据库 (共${totalUniqueTokens}个代币，${totalCount}条记录)`;
-
-                    // 创建表体
-                    sortedTraders.forEach(trader => {
-                        const row = document.createElement('tr');
-                        row.className = 'smart-money-row';
-                        row.style.cssText = 'border-bottom: 1px solid #ddd;';
-
-                        // 添加行点击事件
-                        row.onclick = (e) => {
-                            // 如果点击的是链接或输入框，不触发行选择
-                            if (e.target.tagName === 'A' || e.target.tagName === 'INPUT') return;
-
-                            // 移除其他行的选中状态
-                            tbody.querySelectorAll('.smart-money-row').forEach(r => {
-                                r.classList.remove('selected');
-                            });
-                            // 添加当前行的选中状态
-                            row.classList.add('selected');
+                        cursorRequest.onerror = (event) => {
+                            const error = `打开游标失败: ${event.target.error}`;
+                            DebugLogger.log(error, 'error');
+                            throw new Error(error);
                         };
 
-                        const rowData = [
-                            trader.token,
-                            trader.ca,
-                            trader.address,
-                            trader.dev || 'N/A',
-                            trader.launch_time ? new Date(trader.launch_time).toLocaleString() : 'N/A',
-
-                            // 新增字段
-                            this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
-                            trader.last_active_time || 'N/A',
-                            trader.start_holding_at || 'N/A',
-                            trader.end_holding_at || 'N/A',
-                            trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
-
-                            trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
-
-                            this.formatNumberWithCommas(trader.buy_volume),
-                            this.formatNumberWithCommas(trader.sell_volume),
-                            this.formatNumberWithCommas(trader.realized_profit),
-                            trader.twitter_username || 'N/A',
-                            trader.user_name || 'N/A',
-                            trader.profit_tag || 'N/A',
-                            trader.tag_1 || '',
-                            trader.tag_2 || '',
-                            trader.tag_3 || '',
-                            trader.update_time,
-                        ];
-
-                        rowData.forEach((cellData, index) => {
-                            const td = document.createElement('td');
-                            td.dataset.columnIndex = index;
-                            td.dataset.originalValue = cellData;
-
-                            // 可编辑的列（除了某些特殊列）
-                            const editableColumns = [0, 3, 17, 18, 19]; // 名称、Dev、标签1、标签2、标签3
-
-                            // 处理Twitter链接
-                            if (index === 14 && cellData !== 'N/A') {  // Twitter列
-                                const link = document.createElement('a');
-                                link.href = `https://x.com/${cellData}`;
-                                link.target = '_blank';
-                                link.textContent = cellData;
-                                link.style.cssText = `
-                                    color: #1DA1F2;
-                                    text-decoration: none;
-                                `;
-                                link.onmouseover = () => link.style.textDecoration = 'underline';
-                                link.onmouseout = () => link.style.textDecoration = 'none';
-                                td.appendChild(link);
-                            } else {
-                                // 可编辑单元格的处理
-                                if (editableColumns.includes(index)) {
-                                    td.style.cursor = 'text';
-                                    td.textContent = cellData;
-
-                                    td.ondblclick = (e) => {
-                                        const currentTrader = trader; // 保存当前行的 trader 数据
-                                        // 创建输入框
-                                        const input = document.createElement('input');
-                                        input.type = 'text';
-                                        input.value = cellData;
-                                        input.style.cssText = `
-                                            width: 100%;
-                                            border: 1px solid #4CAF50;
-                                            padding: 4px;
-                                            box-sizing: border-box;
-                                        `;
-
-                                        // 创建操作按钮容器
-                                        const actionContainer = document.createElement('div');
-                                        actionContainer.style.cssText = `
-                                            display: flex;
-                                            margin-left: 5px;
-                                        `;
-
-                                        // 确认按钮
-                                        const confirmBtn = document.createElement('button');
-                                        confirmBtn.innerHTML = '✓';
-                                        confirmBtn.style.cssText = `
-                                            background-color: green;
-                                            color: white;
-                                            border: none;
-                                            padding: 4px 8px;
-                                            margin-right: 5px;
-                                            cursor: pointer;
-                                        `;
-
-                                        // 取消按钮
-                                        const cancelBtn = document.createElement('button');
-                                        cancelBtn.innerHTML = '✗';
-                                        cancelBtn.style.cssText = `
-                                            background-color: red;
-                                            color: white;
-                                            border: none;
-                                            padding: 4px 8px;
-                                            cursor: pointer;
-                                        `;
-
-                                        // 替换单元格内容
-                                        td.innerHTML = '';
-                                        td.appendChild(input);
-                                        actionContainer.appendChild(confirmBtn);
-                                        actionContainer.appendChild(cancelBtn);
-                                        td.appendChild(actionContainer);
-
-                                        input.focus();
-
-                                        // 确认更新
-                                        confirmBtn.onclick = async () => {
-                                            const newValue = input.value;
-
-                                            // 更新数据库
-                                            try {
-                                                const transaction = this.db.db.transaction([this.db.storeName], 'readwrite');
-                                                const store = transaction.objectStore(this.db.storeName);
-
-                                                // 根据列类型执行不同的更新逻辑
-                                                let addressIndex;
-                                                let addressRequest;
-                                                let tagField;
-                                                
-                                                switch(index) {
-                                                    case 0: // token名称列
-                                                        {
-                                                            // 获取所有相同CA的记录
-                                                            const caIndex = store.index('ca');
-                                                            const caRequest = caIndex.getAll(IDBKeyRange.only(currentTrader.ca));
-                                                            
-                                                            caRequest.onsuccess = async () => {
-                                                                const tradersWithSameCA = caRequest.result;
-                                                                for (const trader of tradersWithSameCA) {
-                                                                    trader.token = newValue;
-                                                                    await store.put(trader);
-                                                                }
-                                                                DebugLogger.log(`批量更新token名称成功: ${tradersWithSameCA.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
-                                                                // 刷新表格显示
-                                                                this.loadAndDisplayData();
-                                                            };
-                                                        }
-                                                        break;
-
-                                                    case 3: // Dev列
-                                                        {
-                                                            // 获取所有相同CA的记录
-                                                            const caIndex = store.index('ca');
-                                                            const caRequest = caIndex.getAll(IDBKeyRange.only(currentTrader.ca));
-                                                            
-                                                            caRequest.onsuccess = async () => {
-                                                                const tradersWithSameCA = caRequest.result;
-                                                                for (const trader of tradersWithSameCA) {
-                                                                    trader.dev = newValue;
-                                                                    await store.put(trader);
-                                                                }
-                                                                DebugLogger.log(`批量更新Dev成功: ${tradersWithSameCA.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
-                                                                // 刷新表格显示
-                                                                this.loadAndDisplayData();
-                                                            };
-                                                        }
-                                                        break;
-
-                                                    case 17: // tag_1
-                                                    case 18: // tag_2
-                                                    case 19: // tag_3
-                                                        {
-                                                            addressIndex = store.index('address');
-                                                            addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
-                                                            tagField = index === 17 ? 'tag_1' : (index === 18 ? 'tag_2' : 'tag_3');
-
-                                                            addressRequest.onsuccess = async () => {
-                                                                const tradersWithSameAddress = addressRequest.result;
-                                                                for (const trader of tradersWithSameAddress) {
-                                                                    trader[tagField] = newValue;
-                                                                    await store.put(trader);
-                                                                }
-                                                                DebugLogger.log(`批量更新${tagField}成功: ${tradersWithSameAddress.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
-                                                                // 刷新表格显示
-                                                                this.loadAndDisplayData();
-                                                            };
-                                                        }
-                                                        break;
-
-                                                    default:
-                                                        {
-                                                            // 其他列的单条更新逻辑
-                                                            const traderIndex = store.index('ca_address');
-                                                            const request = traderIndex.get(IDBKeyRange.only([currentTrader.ca, currentTrader.address]));
-
-                                                            request.onsuccess = () => {
-                                                                const traderToUpdate = request.result;
-                                                                if (traderToUpdate) {
-                                                                    // 根据列更新不同的字段
-                                                                    switch(index) {
-                                                                        case 3: traderToUpdate.dev = newValue; break;
-                                                                    }
-
-                                                                    // 更新数据库记录
-                                                                    const updateRequest = store.put(traderToUpdate);
-                                                                    updateRequest.onsuccess = () => {
-                                                                        td.textContent = newValue;
-                                                                        td.dataset.originalValue = newValue;
-                                                                        DebugLogger.log(`更新成功: ${newValue}`, CONFIG.DEBUG_LEVEL.INFO);
-                                                                    };
-                                                                    updateRequest.onerror = () => {
-                                                                        DebugLogger.log('更新失败', CONFIG.DEBUG_LEVEL.ERROR);
-                                                                        td.textContent = cellData; // 恢复原值
-                                                                    };
-                                                                }
-                                                            };
-                                                        }
-                                                }
-
-                                            } catch (error) {
-                                                DebugLogger.log(`更新错误: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
-                                                td.textContent = cellData; // 恢复原值
-                                            }
-                                        };
-
-                                        // 取消编辑
-                                        cancelBtn.onclick = () => {
-                                            td.textContent = cellData;
-                                        };
-                                    };
-                                } else {
-                                    td.textContent = cellData;
-                                }
-                            }
-
-                            td.style.cssText = `
-                                border: 1px solid #ddd;
-                                padding: 8px;
-                                font-size: 12px;
-                                white-space: nowrap;
-                                overflow: hidden;
-                                text-overflow: ellipsis;
-                            `;
-
-                            // 处理利润高亮
-                            if (index === 13) {// realized_profit列
-                                const profit = parseFloat(cellData.replace(/,/g, ''));
-                                if (!isNaN(profit)) {// 确保转换后是有效数字
-                                    if (profit >= 100000) {
-                                        // 超过10万的更醒目显示
-                                        td.style.cssText += `
-                                            color: #ff0000 !important;
-                                            font-weight: bold !important;
-                                            background-color: #fff0f0 !important;
-                                            font-size: 14px !important;
-                                            text-shadow: 0 0 1px rgba(255,0,0,0.3) !important;
-                                            border-left: 3px solid #ff0000 !important;
-                                        `;
-                                    } else if (profit >= 10000) {
-                                        // 超过1万的红色显示
-                                        td.style.cssText += `
-                                            color: #ff0000 !important;
-                                            font-weight: bold !important;
-                                        `;
+                        cursorRequest.onsuccess = (event) => {
+                            try {
+                                const cursor = event.target.result;
+                                if (cursor && count < offset) {
+                                    count++;
+                                    cursor.continue();
+                                } else if (cursor && pageData.length < this.pageSize) {
+                                    // 应用查询过滤
+                                    const trader = cursor.value;
+                                    if (!queryType || !queryValue || this.matchesQuery(trader, queryType, queryValue)) {
+                                        pageData.push(trader);
+                                        DebugLogger.log(`加载记录: ${trader.ca} - ${trader.address}`, 'info');
                                     }
+                                    cursor.continue();
+                                } else {
+                                    // 清除加载提示
+                                    const loadingIndicator = tableContainer.querySelector('.loading-indicator');
+                                    if (loadingIndicator) {
+                                        loadingIndicator.remove();
+                                    }
+
+                                    // 渲染数据和分页控件
+                                    DebugLogger.log(`本页加载完成，共 ${pageData.length} 条记录`, 'info');
+                                    this.renderTableWithData(pageData, tableContainer);
+                                    
+                                    // 移除旧的分页控件
+                                    const oldPagination = this.dataViewerModal.querySelector('.pagination-container');
+                                    if (oldPagination) {
+                                        oldPagination.remove();
+                                    }
+                                    
+                                    // 渲染新的分页控件
+                                    this.renderPagination(totalRecords);
+                                    
+                                    const duration = endTimer();
+                                    DebugLogger.log(`数据加载耗时: ${duration.toFixed(2)}ms`, 'info');
                                 }
+                            } catch (error) {
+                                DebugLogger.log(`处理游标数据失败: ${error}`, 'error');
+                                tableContainer.innerHTML = `
+                                    <div style="text-align: center; padding: 20px; color: #f44336;">
+                                        <div>数据处理失败: ${error.message || '未知错误'}</div>
+                                        <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px;">刷新页面</button>
+                                    </div>
+                                `;
                             }
-
-                            // 为地址和Dev添加背景色
-                            if (index === 2 && addressColors.has(cellData)) {
-                                td.style.backgroundColor = addressColors.get(cellData);
-                            } else if (index === 3 && devColors.has(cellData)) {
-                                td.style.backgroundColor = devColors.get(cellData);
-                            }
-
-                            // 如果是查询的字段，添加高亮
-                            if (queryValue && queryType === headers[index] &&
-                                String(cellData).toLowerCase().includes(queryValue.toLowerCase())) {
-                                td.style.fontWeight = 'bold';
-                                td.style.color = '#1a73e8';
-                            }
-
-                            td.title = cellData;
-                            row.appendChild(td);
-                        });
-
-                        tbody.appendChild(row);
-                    });
-
-                    table.appendChild(tbody);
-                    tableContainer.appendChild(table);
+                        };
+                    } catch (error) {
+                        DebugLogger.log(`处理记录数据失败: ${error}`, 'error');
+                        throw error;
+                    }
                 };
+
             } catch (error) {
-                console.error('加载数据失败:', error);
+                DebugLogger.log(`加载数据失败: ${error}`, 'error');
                 tableContainer.innerHTML = `
                     <div style="text-align: center; padding: 20px; color: #f44336;">
                         <div>数据加载失败: ${error.message || '未知错误'}</div>
                         <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px;">刷新页面</button>
                     </div>
                 `;
+            }
+        }
+
+        // 添加分页控件渲染方法
+        renderPagination(totalRecords) {
+            const paginationContainer = document.createElement('div');
+            paginationContainer.className = 'pagination-container';
+            paginationContainer.style.cssText = `
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin-top: 20px;
+                gap: 10px;
+            `;
+
+            // 添加页码按钮
+            const addPageButton = (text, page, disabled = false) => {
+                const button = document.createElement('button');
+                button.textContent = text;
+                button.style.cssText = `
+                    padding: 5px 10px;
+                    border: 1px solid #ddd;
+                    border-radius: 4px;
+                    background: ${disabled ? '#f5f5f5' : 'white'};
+                    cursor: ${disabled ? 'default' : 'pointer'};
+                    color: ${disabled ? '#999' : '#333'};
+                `;
+                if (!disabled) {
+                    button.onclick = () => {
+                        this.currentPage = page;
+                        this.loadAndDisplayData();
+                    };
+                }
+                paginationContainer.appendChild(button);
+            };
+
+            // 上一页
+            addPageButton('上一页', this.currentPage - 1, this.currentPage === 1);
+
+            // 页码
+            for (let i = Math.max(1, this.currentPage - 2); i <= Math.min(this.totalPages, this.currentPage + 2); i++) {
+                addPageButton(i.toString(), i, i === this.currentPage);
+            }
+
+            // 下一页
+            addPageButton('下一页', this.currentPage + 1, this.currentPage === this.totalPages);
+
+            // 显示总记录数和当前页信息
+            const info = document.createElement('span');
+            info.textContent = `共 ${totalRecords} 条记录，第 ${this.currentPage}/${this.totalPages} 页`;
+            paginationContainer.appendChild(info);
+
+            this.dataViewerModal.appendChild(paginationContainer);
+        }
+
+        // 添加查询匹配方法
+        matchesQuery(trader, queryType, queryValue) {
+            const queryMap = {
+                '名称': 'token',
+                '合约': 'ca',
+                '聪明钱': 'address',
+                'Dev': 'dev'
+            };
+            const field = queryMap[queryType];
+            return String(trader[field]).toLowerCase().includes(queryValue.toLowerCase());
+        }
+
+        // 添加表格数据渲染方法
+        renderTableWithData(traders, container) {
+            const endTimer = this.performanceMonitor.startTimer('renderTable');
+            
+            // 创建表格
+            const table = document.createElement('table');
+            table.style.cssText = 'width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px;';
+
+            // 获取当前的查询参数
+            const queryTypeSelect = this.dataViewerModal.querySelector('select');
+            const queryInput = this.dataViewerModal.querySelector('input[type="text"]');
+            const currentQueryType = queryTypeSelect ? queryTypeSelect.value : '';
+            const currentQueryValue = queryInput ? queryInput.value : '';
+
+            // 定义列宽配置
+            const columnWidths = {
+                '名称': '50px',
+                '合约': '100px',
+                '聪明钱': '100px',
+                'Dev': '100px',
+                'Pump内盘发射': '120px',
+                'SOL余额': '80px',
+                '最后活跃时间': '120px',
+                '买入时间': '120px',
+                '卖出时间': '120px',
+                'Pump到买入(秒)': '100px',
+                '持有时长(分钟)': '100px',
+                '买入金额': '60px',
+                '卖出金额': '60px',
+                '到手利润': '70px',
+                'Twitter': '50px',
+                '用户名': '50px',
+                '排名': '30px',
+                '标签1': '50px',
+                '标签2': '50px',
+                '标签3': '50px',
+
+                '更新时间': '120px'
+            };
+
+            // 创建表头
+            const thead = document.createElement('thead');
+            thead.style.cssText = 'background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;';
+
+            // 添加必要的样式
+            const styleSheet = document.createElement('style');
+            styleSheet.textContent = `
+                .smart-money-row {
+                    transition: background-color 0.2s ease;
+                }
+                .smart-money-row:hover {
+                    background-color: #f5f5f5;
+                }
+                .smart-money-row.selected {
+                    background-color: #e8f5e9;
+                    border-left: 4px solid #4CAF50;
+                }
+            `;
+            document.head.appendChild(styleSheet);
+
+            const headerRow = document.createElement('tr');
+            const headers = [
+                '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
+                'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
+                '买入金额', '卖出金额', '到手利润',
+                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
+            ];
+
+            headers.forEach((headerText, index) => {
+                const th = document.createElement('th');
+                th.textContent = headerText;
+                th.style.cssText = `
+                    border: 1px solid #ddd;
+                    padding: 8px;
+                    text-align: left;
+                    font-size: 14px;
+                    background-color: #f2f2f2;
+                    cursor: pointer;
+                    width: ${columnWidths[headerText]};
+                    position: relative;
+                    user-select: none;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                `;
+
+                // 添加排序点击事件
+                th.onclick = () => this.sortTableByColumn(table, index);
+
+                // 添加拖拽调整宽度功能
+                const resizer = document.createElement('div');
+                resizer.style.cssText = `
+                    width: 5px;
+                    height: 100%;
+                    background: #0000;
+                    position: absolute;
+                    right: 0;
+                    top: 0;
+                    cursor: col-resize;
+                `;
+                resizer.addEventListener('mousedown', (e) => this.initColumnResize(e, th));
+                th.appendChild(resizer);
+
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+
+            // 创建表体
+            const tbody = document.createElement('tbody');
+
+            // 生成地址和Dev的颜色映射
+            const addressColors = new Map();
+            const devColors = new Map();
+            const usedColors = new Set();
+            const colors = [
+                '#FFB6C1', '#98FB98', '#87CEFA', '#DDA0DD', '#F0E68C',
+                '#E6E6FA', '#FFA07A', '#98FF98', '#B0E0E6', '#FFB6C1',
+                '#FFDAB9', '#B0C4DE', '#F0FFF0', '#FFF0F5', '#F5F5DC'
+            ];
+
+            // 为重复的地址分配颜色
+            traders.forEach(trader => {
+                if (trader.address && !addressColors.has(trader.address)) {
+                    const sameAddresses = traders.filter(t => t.address === trader.address);
+                    if (sameAddresses.length > 1) {
+                        let color;
+                        do {
+                            color = colors[Math.floor(Math.random() * colors.length)];
+                        } while (usedColors.has(color));
+                        usedColors.add(color);
+                        addressColors.set(trader.address, color);
+                    }
+                }
+            });
+
+            // 为重复的Dev分配颜色
+            traders.forEach(trader => {
+                if (trader.dev && !devColors.has(trader.dev)) {
+                    const sameDevs = traders.filter(t => t.dev === trader.dev);
+                    if (sameDevs.length > 1) {
+                        let color;
+                        do {
+                            color = colors[Math.floor(Math.random() * colors.length)];
+                        } while (usedColors.has(color));
+                        usedColors.add(color);
+                        devColors.set(trader.dev, color);
+                    }
+                }
+            });
+
+            // 按照更新时间倒序、合约和profit_tag顺序排序
+            const sortedTraders = traders.sort((a, b) => {
+                const timeComparison = new Date(b.update_time) - new Date(a.update_time);
+                if (timeComparison !== 0) return timeComparison;
+                const caComparison = a.ca.localeCompare(b.ca);
+                if (caComparison !== 0) return caComparison;
+                return (a.profit_tag || 0) - (b.profit_tag || 0);
+            });
+
+            // 更新标题显示查询结果数量和代币数量
+            const title = this.dataViewerModal.children[0];
+            const totalCount = traders.length;
+            const filteredCount = sortedTraders.length;
+            const uniqueTokens = new Set(sortedTraders.map(trader => trader.token));
+            const tokenCount = uniqueTokens.size;
+            const totalUniqueTokens = new Set(traders.map(trader => trader.token)).size;
+
+            // 使用正确获取的查询参数
+            if (currentQueryType && currentQueryValue) {
+                title.textContent = `聪明钱数据库 (查询到 ${filteredCount} 条记录，${tokenCount}个代币，总计${totalCount}条记录，${totalUniqueTokens}个代币)`;
+            } else {
+                title.textContent = `聪明钱数据库 (共${totalUniqueTokens}个代币，${totalCount}条记录)`;
+            }
+
+            // 创建表体
+            sortedTraders.forEach(trader => {
+                const row = document.createElement('tr');
+                row.className = 'smart-money-row';
+                row.style.cssText = 'border-bottom: 1px solid #ddd;';
+
+                // 添加行点击事件
+                row.onclick = (e) => {
+                    // 如果点击的是链接或输入框，不触发行选择
+                    if (e.target.tagName === 'A' || e.target.tagName === 'INPUT') return;
+
+                    // 移除其他行的选中状态
+                    tbody.querySelectorAll('.smart-money-row').forEach(r => {
+                        r.classList.remove('selected');
+                    });
+                    // 添加当前行的选中状态
+                    row.classList.add('selected');
+                };
+
+                const rowData = [
+                    trader.token,
+                    trader.ca,
+                    trader.address,
+                    trader.dev || 'N/A',
+                    trader.launch_time ? new Date(trader.launch_time).toLocaleString() : 'N/A',
+
+                    // 新增字段
+                    this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
+                    trader.last_active_time || 'N/A',
+                    trader.start_holding_at || 'N/A',
+                    trader.end_holding_at || 'N/A',
+                    trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
+
+                    trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
+
+                    this.formatNumberWithCommas(trader.buy_volume),
+                    this.formatNumberWithCommas(trader.sell_volume),
+                    this.formatNumberWithCommas(trader.realized_profit),
+                    trader.twitter_username || 'N/A',
+                    trader.user_name || 'N/A',
+                    trader.profit_tag || 'N/A',
+                    trader.tag_1 || '',
+                    trader.tag_2 || '',
+                    trader.tag_3 || '',
+                    trader.update_time,
+                ];
+
+                rowData.forEach((cellData, index) => {
+                    const td = document.createElement('td');
+                    td.dataset.columnIndex = index;
+                    td.dataset.originalValue = cellData;
+
+                    // 可编辑的列（除了某些特殊列）
+                    const editableColumns = [0, 3, 17, 18, 19]; // 名称、Dev、标签1、标签2、标签3
+
+                    // 处理Twitter链接
+                    if (index === 14 && cellData !== 'N/A') {  // Twitter列
+                        const link = document.createElement('a');
+                        link.href = `https://x.com/${cellData}`;
+                        link.target = '_blank';
+                        link.textContent = cellData;
+                        link.style.cssText = `
+                            color: #1DA1F2;
+                            text-decoration: none;
+                        `;
+                        link.onmouseover = () => link.style.textDecoration = 'underline';
+                        link.onmouseout = () => link.style.textDecoration = 'none';
+                        td.appendChild(link);
+                    } else {
+                        // 可编辑单元格的处理
+                        if (editableColumns.includes(index)) {
+                            td.style.cursor = 'text';
+                            td.textContent = cellData;
+
+                            td.ondblclick = (e) => {
+                                const currentTrader = trader; // 保存当前行的 trader 数据
+                                // 创建输入框
+                                const input = document.createElement('input');
+                                input.type = 'text';
+                                input.value = cellData;
+                                input.style.cssText = `
+                                    width: 100%;
+                                    border: 1px solid #4CAF50;
+                                    padding: 4px;
+                                    box-sizing: border-box;
+                                `;
+
+                                // 创建操作按钮容器
+                                const actionContainer = document.createElement('div');
+                                actionContainer.style.cssText = `
+                                    display: flex;
+                                    margin-left: 5px;
+                                `;
+
+                                // 确认按钮
+                                const confirmBtn = document.createElement('button');
+                                confirmBtn.innerHTML = '✓';
+                                confirmBtn.style.cssText = `
+                                    background-color: green;
+                                    color: white;
+                                    border: none;
+                                    padding: 4px 8px;
+                                    margin-right: 5px;
+                                    cursor: pointer;
+                                `;
+
+                                // 取消按钮
+                                const cancelBtn = document.createElement('button');
+                                cancelBtn.innerHTML = '✗';
+                                cancelBtn.style.cssText = `
+                                    background-color: red;
+                                    color: white;
+                                    border: none;
+                                    padding: 4px 8px;
+                                    cursor: pointer;
+                                `;
+
+                                // 替换单元格内容
+                                td.innerHTML = '';
+                                td.appendChild(input);
+                                actionContainer.appendChild(confirmBtn);
+                                actionContainer.appendChild(cancelBtn);
+                                td.appendChild(actionContainer);
+
+                                input.focus();
+
+                                // 确认更新
+                                confirmBtn.onclick = async () => {
+                                    const newValue = input.value;
+
+                                    // 更新数据库
+                                    try {
+                                        const transaction = this.db.db.transaction([this.db.storeName], 'readwrite');
+                                        const store = transaction.objectStore(this.db.storeName);
+
+                                        // 根据列类型执行不同的更新逻辑
+                                        let addressIndex;
+                                        let addressRequest;
+                                        let tagField;
+                                        
+                                        switch(index) {
+                                            case 0: // token名称列
+                                                {
+                                                    // 获取所有相同CA的记录
+                                                    const caIndex = store.index('ca');
+                                                    const caRequest = caIndex.getAll(IDBKeyRange.only(currentTrader.ca));
+                                                    
+                                                    caRequest.onsuccess = async () => {
+                                                        const tradersWithSameCA = caRequest.result;
+                                                        for (const trader of tradersWithSameCA) {
+                                                            trader.token = newValue;
+                                                            await store.put(trader);
+                                                        }
+                                                        DebugLogger.log(`批量更新token名称成功: ${tradersWithSameCA.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+                                                        // 刷新表格显示
+                                                        this.loadAndDisplayData();
+                                                    };
+                                                }
+                                                break;
+
+                                            case 3: // Dev列
+                                                {
+                                                    // 获取所有相同CA的记录
+                                                    const caIndex = store.index('ca');
+                                                    const caRequest = caIndex.getAll(IDBKeyRange.only(currentTrader.ca));
+                                                    
+                                                    caRequest.onsuccess = async () => {
+                                                        const tradersWithSameCA = caRequest.result;
+                                                        for (const trader of tradersWithSameCA) {
+                                                            trader.dev = newValue;
+                                                            await store.put(trader);
+                                                        }
+                                                        DebugLogger.log(`批量更新Dev成功: ${tradersWithSameCA.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+                                                        // 刷新表格显示
+                                                        this.loadAndDisplayData();
+                                                    };
+                                                }
+                                                break;
+
+                                            case 17: // tag_1
+                                            case 18: // tag_2
+                                            case 19: // tag_3
+                                                {
+                                                    addressIndex = store.index('address');
+                                                    addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
+                                                    tagField = index === 17 ? 'tag_1' : (index === 18 ? 'tag_2' : 'tag_3');
+
+                                                    addressRequest.onsuccess = async () => {
+                                                        const tradersWithSameAddress = addressRequest.result;
+                                                        for (const trader of tradersWithSameAddress) {
+                                                            trader[tagField] = newValue;
+                                                            await store.put(trader);
+                                                        }
+                                                        DebugLogger.log(`批量更新${tagField}成功: ${tradersWithSameAddress.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+                                                        // 刷新表格显示
+                                                        this.loadAndDisplayData();
+                                                    };
+                                                }
+                                                break;
+
+                                            default:
+                                                {
+                                                    // 其他列的单条更新逻辑
+                                                    const traderIndex = store.index('ca_address');
+                                                    const request = traderIndex.get(IDBKeyRange.only([currentTrader.ca, currentTrader.address]));
+
+                                                    request.onsuccess = () => {
+                                                        const traderToUpdate = request.result;
+                                                        if (traderToUpdate) {
+                                                            // 根据列更新不同的字段
+                                                            switch(index) {
+                                                                case 3: traderToUpdate.dev = newValue; break;
+                                                            }
+
+                                                            // 更新数据库记录
+                                                            const updateRequest = store.put(traderToUpdate);
+                                                            updateRequest.onsuccess = () => {
+                                                                td.textContent = newValue;
+                                                                td.dataset.originalValue = newValue;
+                                                                DebugLogger.log(`更新成功: ${newValue}`, CONFIG.DEBUG_LEVEL.INFO);
+                                                            };
+                                                            updateRequest.onerror = () => {
+                                                                DebugLogger.log('更新失败', CONFIG.DEBUG_LEVEL.ERROR);
+                                                                td.textContent = cellData; // 恢复原值
+                                                            };
+                                                        }
+                                                    };
+                                                }
+                                        }
+
+                                    } catch (error) {
+                                        DebugLogger.log(`更新错误: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                        td.textContent = cellData; // 恢复原值
+                                    }
+                                };
+
+                                // 取消编辑
+                                cancelBtn.onclick = () => {
+                                    td.textContent = cellData;
+                                };
+                            };
+                        } else {
+                            td.textContent = cellData;
+                        }
+                    }
+
+                    td.style.cssText = `
+                        border: 1px solid #ddd;
+                        padding: 8px;
+                        font-size: 12px;
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                    `;
+
+                    // 处理利润高亮
+                    if (index === 13) {// realized_profit列
+                        const profit = parseFloat(cellData.replace(/,/g, ''));
+                        if (!isNaN(profit)) {// 确保转换后是有效数字
+                            if (profit >= 100000) {
+                                // 超过10万的更醒目显示
+                                td.style.cssText += `
+                                    color: #ff0000 !important;
+                                    font-weight: bold !important;
+                                    background-color: #fff0f0 !important;
+                                    font-size: 14px !important;
+                                    text-shadow: 0 0 1px rgba(255,0,0,0.3) !important;
+                                    border-left: 3px solid #ff0000 !important;
+                                `;
+                            } else if (profit >= 10000) {
+                                // 超过1万的红色显示
+                                td.style.cssText += `
+                                    color: #ff0000 !important;
+                                    font-weight: bold !important;
+                                `;
+                            }
+                        }
+                    }
+
+                    // 为地址和Dev添加背景色
+                    if (index === 2 && addressColors.has(cellData)) {
+                        td.style.backgroundColor = addressColors.get(cellData);
+                    } else if (index === 3 && devColors.has(cellData)) {
+                        td.style.backgroundColor = devColors.get(cellData);
+                    }
+
+                    // 如果是查询的字段，添加高亮
+                    if (currentQueryType && currentQueryValue && currentQueryType === headers[index] &&
+                        String(cellData).toLowerCase().includes(currentQueryValue.toLowerCase())) {
+                        td.style.fontWeight = 'bold';
+                        td.style.color = '#1a73e8';
+                    }
+
+                    td.title = cellData;
+                    row.appendChild(td);
+                });
+
+                tbody.appendChild(row);
+            });
+
+            table.appendChild(tbody);
+            container.appendChild(table);
+            
+            const duration = endTimer();
+            if (duration > 500) {
+                DebugLogger.log(`性能警告: 表格渲染耗时 ${duration.toFixed(2)}ms`, 'warning');
             }
         }
 
@@ -2121,6 +2240,56 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             };
 
             document.body.appendChild(modal);
+        }
+    }
+
+    // 添加性能监控类
+    class PerformanceMonitor {
+        constructor() {
+            this.metrics = new Map();
+            this.warnings = [];
+            this.thresholds = {
+                loadData: 1000, // 加载数据超过1秒报警
+                renderTable: 500, // 渲染表格超过500ms报警
+                dbOperation: 200 // 数据库操作超过200ms报警
+            };
+        }
+
+        startTimer(operation) {
+            const startTime = performance.now();
+            return () => {
+                const endTime = performance.now();
+                const duration = endTime - startTime;
+                
+                if (!this.metrics.has(operation)) {
+                    this.metrics.set(operation, []);
+                }
+                this.metrics.get(operation).push(duration);
+
+                // 检查是否超过阈值
+                if (this.thresholds[operation] && duration > this.thresholds[operation]) {
+                    const warning = `性能警告: ${operation} 操作耗时 ${duration.toFixed(2)}ms，超过阈值 ${this.thresholds[operation]}ms`;
+                    this.warnings.push(warning);
+                    DebugLogger.log(warning, 'warning');
+                }
+
+                return duration;
+            };
+        }
+
+        getAverageTime(operation) {
+            const times = this.metrics.get(operation);
+            if (!times || times.length === 0) return 0;
+            return times.reduce((a, b) => a + b, 0) / times.length;
+        }
+
+        getWarnings() {
+            return this.warnings;
+        }
+
+        clearMetrics() {
+            this.metrics.clear();
+            this.warnings = [];
         }
     }
 
