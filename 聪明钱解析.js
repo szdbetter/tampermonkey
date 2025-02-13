@@ -493,8 +493,15 @@
                 for (const [index, item] of topTraders.entries()) {
                     // 计算持有时间
                     const startHoldingAtTimestamp = item.start_holding_at * 1000; // 转换为毫秒
-                    const endHoldingAt = item.end_holding_at ? item.end_holding_at * 1000 : Date.now();
-                    const holdingPeriod = Math.round((endHoldingAt - startHoldingAtTimestamp) / 60000); // 转换为分钟
+                    let holdingPeriod = null;
+                    if (item.end_holding_at === null) {
+                        // 如果没有卖出过，用当前时间计算
+                        holdingPeriod = Math.round((Date.now() - startHoldingAtTimestamp) / 60000); // 转换为分钟
+                    } else {
+                        // 如果有卖出时间，使用卖出时间计算
+                        const endHoldingAt = item.end_holding_at * 1000;
+                        holdingPeriod = Math.round((endHoldingAt - startHoldingAtTimestamp) / 60000); // 转换为分钟
+                    }
 
                     // 计算 buy_after_launch_interval
                     const createTime = this.tokenName.created_timestamp;
