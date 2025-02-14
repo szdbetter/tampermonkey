@@ -60,8 +60,8 @@
                 position: fixed;
                 bottom: 10px;
                 right: 10px;
-                width: 800px;
-                max-height: 350px;
+                width: 95%;
+                max-height: 300px;
                 overflow-y: auto;
                 background: rgba(0,0,0,0.8);
                 color: #0f0;
@@ -2178,6 +2178,24 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             const buttonContainer = document.createElement('div');
             buttonContainer.style.cssText = 'display: flex; gap: 10px;';
 
+            // 添加时间选择下拉框
+            const timeSelect = document.createElement('select');
+            timeSelect.style.cssText = `
+                padding: 5px 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-right: 10px;
+                height: 30px;
+
+            `;
+            ['1m', '5m', '1h', '6h', '24h'].forEach(time => {
+                const option = document.createElement('option');
+                option.value = time;
+                option.textContent = time;
+                if (time === '24h') option.selected = true;
+                timeSelect.appendChild(option);
+            });
+
             const startButton = document.createElement('button');
             startButton.textContent = '开始采集';
             startButton.style.cssText = `
@@ -2187,6 +2205,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 border: none;
                 border-radius: 5px;
                 cursor: pointer;
+                height: 40px;
             `;
 
             const closeButton = document.createElement('button');
@@ -2198,18 +2217,33 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 border: none;
                 border-radius: 5px;
                 cursor: pointer;
+                height: 40px;
             `;
 
-            // 添加GMGN 24H热点按钮
-            const gmgnHotButton = document.createElement('button');
-            gmgnHotButton.textContent = 'GMGN 24H热点';
-            gmgnHotButton.style.cssText = `
+            // 添加GMGN热门(所有)按钮
+            const gmgnAllButton = document.createElement('button');
+            gmgnAllButton.textContent = 'GMGN热门(所有)';
+            gmgnAllButton.style.cssText = `
                 padding: 10px 20px;
                 background: #2196F3;
                 color: white;
                 border: none;
                 border-radius: 5px;
                 cursor: pointer;
+                height: 40px;
+            `;
+
+            // 添加GMGN热门(PUMP)按钮
+            const gmgnPumpButton = document.createElement('button');
+            gmgnPumpButton.textContent = 'GMGN热门(PUMP)';
+            gmgnPumpButton.style.cssText = `
+                padding: 10px 20px;
+                background: #9c27b0;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                height: 40px;
             `;
 
             // 右侧状态显示区域
@@ -2221,6 +2255,45 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 display: flex;
                 flex-direction: column;
             `;
+
+            // 添加筛选条件区域
+            const filterContainer = document.createElement('div');
+            filterContainer.style.cssText = `
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 5px;
+                display: flex;
+                gap: 15px;
+                align-items: center;
+            `;
+
+            // 持有人输入框
+            const holderContainer = document.createElement('div');
+            holderContainer.style.cssText = 'display: flex; align-items: center; gap: 5px;';
+            const holderLabel = document.createElement('label');
+            holderLabel.textContent = '最少持有人(K):';
+            const holderInput = document.createElement('input');
+            holderInput.type = 'number';
+            holderInput.value = '3';
+            holderInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
+            holderContainer.appendChild(holderLabel);
+            holderContainer.appendChild(holderInput);
+
+            // 市值输入框
+            const marketCapContainer = document.createElement('div');
+            marketCapContainer.style.cssText = 'display: flex; align-items: center; gap: 5px;';
+            const marketCapLabel = document.createElement('label');
+            marketCapLabel.textContent = '最小市值(M):';
+            const marketCapInput = document.createElement('input');
+            marketCapInput.type = 'number';
+            marketCapInput.value = '1';
+            marketCapInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
+            marketCapContainer.appendChild(marketCapLabel);
+            marketCapContainer.appendChild(marketCapInput);
+
+            filterContainer.appendChild(holderContainer);
+            filterContainer.appendChild(marketCapContainer);
 
             const statusTitle = document.createElement('h3');
             statusTitle.textContent = '采集状态';
@@ -2251,6 +2324,12 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 margin-top: 10px;
                 max-height: 500px;
                 overflow-y: auto;
+                background: white;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                padding: 10px;
+                position: relative;
+                z-index: 1;
             `;
 
             // 格式化数字为K/M单位
@@ -2283,54 +2362,58 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
 
             // 创建GMGN热点数据表格
             const createGmgnTable = (data) => {
+                DebugLogger.log(`开始创建表格，数据条数: ${data.length}`, CONFIG.DEBUG_LEVEL.INFO);
+
                 const table = document.createElement('table');
                 table.style.cssText = `
                     width: 100%;
                     border-collapse: collapse;
                     margin-top: 10px;
+                    font-size: 12px;
                 `;
 
                 // 表头
                 const thead = document.createElement('thead');
                 thead.innerHTML = `
                     <tr>
-                        <th style="width: 30px;"><input type="checkbox" id="selectAll"></th>
-                        <th style="width: 50px;">NO.</th>
-                        <th style="width: 50px;">Logo</th>
-                        <th style="width: 100px;">名称</th>
-                        <th style="width: 200px;">CA</th>
-                        <th style="width: 100px;">持有人</th>
-                        <th style="width: 100px;">市值</th>
-                        <th style="width: 100px;">VOL</th>
-                        <th style="width: 100px;">创建时间</th>
+                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 30px;"><input type="checkbox" id="selectAll"></th>
+                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 50px;">NO.</th>
+                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 50px;">Logo</th>
+                        <th style="padding: 8px; text-align: left; background: #f5f5f5; position: sticky; top: 0; width: 100px;">名称</th>
+                        <th style="padding: 8px; text-align: left; background: #f5f5f5; position: sticky; top: 0; width: 200px;">CA</th>
+                        <th style="padding: 8px; text-align: right; background: #f5f5f5; position: sticky; top: 0; width: 100px;">持有人</th>
+                        <th style="padding: 8px; text-align: right; background: #f5f5f5; position: sticky; top: 0; width: 100px;">市值</th>
+                        <th style="padding: 8px; text-align: right; background: #f5f5f5; position: sticky; top: 0; width: 100px;">VOL</th>
+                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 100px;">创建时间</th>
                     </tr>
-                `;
-                thead.style.cssText = `
-                    background: #f5f5f5;
-                    position: sticky;
-                    top: 0;
                 `;
 
                 // 表体
                 const tbody = document.createElement('tbody');
-                const filteredData = data.filter(item =>
-                    item.holder_count > 3000 && item.market_cap > 1000000
-                );
 
-                filteredData.forEach((item, index) => {
+                data.forEach((item, index) => {
                     const row = document.createElement('tr');
-                    row.innerHTML = `
-                        <td><input type="checkbox" class="tokenCheckbox" data-ca="${item.address}"></td>
-                        <td>${index + 1}</td>
-                        <td><img src="${item.logo}" style="width: 24px; height: 24px; border-radius: 12px;"></td>
-                        <td>${item.symbol}</td>
-                        <td>${item.address}</td>
-                        <td>${item.holder_count.toLocaleString()}</td>
-                        <td>${formatNumber(item.market_cap)}</td>
-                        <td>${formatNumber(item.volume)}</td>
-                        <td>${formatTimeAgo(item.pool_creation_timestamp)}</td>
-                    `;
                     row.style.cssText = 'border-bottom: 1px solid #eee;';
+
+                    const marketCap = parseFloat(item.market_cap || item.usd_market_cap || 0);
+                    const volume = parseFloat(item.volume || item.volume_24h || 0);
+
+                    // 获取创建时间
+                    const createdTimestamp = item.created_timestamp || item.created_at || item.created_time || item.pool_creation_timestamp ;
+                    const createdTimeDisplay = createdTimestamp ? formatTimeAgo(createdTimestamp) : 'N/A';
+
+                    row.innerHTML = `
+                        <td style="padding: 8px; text-align: center;"><input type="checkbox" class="tokenCheckbox" data-ca="${item.address || ''}" /></td>
+                        <td style="padding: 8px; text-align: center;">${index + 1}</td>
+                        <td style="padding: 8px; text-align: center;"><img src="${item.logo || ''}" style="width: 24px; height: 24px; border-radius: 12px;" onerror="this.style.display='none'" /></td>
+                        <td style="padding: 8px; text-align: left;">${item.symbol || item.name || 'N/A'}</td>
+                        <td style="padding: 8px; text-align: left;">${item.address || 'N/A'}</td>
+                        <td style="padding: 8px; text-align: right;">${(item.holder_count || 0).toLocaleString()}</td>
+                        <td style="padding: 8px; text-align: right;">${formatNumber(marketCap)}</td>
+                        <td style="padding: 8px; text-align: right;">${formatNumber(volume)}</td>
+                        <td style="padding: 8px; text-align: center;">${createdTimeDisplay}</td>
+                    `;
+
                     tbody.appendChild(row);
                 });
 
@@ -2344,129 +2427,183 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     checkboxes.forEach(cb => cb.checked = e.target.checked);
                 };
 
-                return table;
+                // 添加批量采集按钮
+                const batchCollectSelectedButton = document.createElement('button');
+                batchCollectSelectedButton.textContent = '采集选中项';
+                batchCollectSelectedButton.style.cssText = `
+                    margin-top: 10px;
+                    padding: 10px 20px;
+                    background: #4CAF50;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                `;
+
+                batchCollectSelectedButton.onclick = () => {
+                    const selectedCAs = Array.from(table.querySelectorAll('.tokenCheckbox:checked'))
+                        .map(cb => cb.dataset.ca);
+
+                    if (selectedCAs.length === 0) {
+                        alert('请至少选择一个代币');
+                        return;
+                    }
+
+                    textarea.value = selectedCAs.join('\n');
+                    gmgnTableContainer.style.display = 'none';
+                    statusContainer.innerHTML = '';
+                };
+
+                const container = document.createElement('div');
+                container.style.cssText = 'max-height: 600px; overflow-y: auto;';
+                container.appendChild(batchCollectSelectedButton);
+                container.appendChild(table);
+
+                DebugLogger.log(`表格创建完成，HTML长度: ${container.innerHTML.length}`, CONFIG.DEBUG_LEVEL.INFO);
+                return container;
             };
 
-            // GMGN热点按钮点击事件
-            gmgnHotButton.onclick = async () => {
+            // GMGN热门(所有)按钮点击事件
+            gmgnAllButton.onclick = async () => {
                 try {
-                    gmgnHotButton.disabled = true;
-                    gmgnHotButton.textContent = '加载中...';
-                    statusContainer.innerHTML = '正在获取GMGN 24H热点数据...';
+                    gmgnAllButton.disabled = true;
+                    gmgnAllButton.textContent = '加载中...';
+                    const selectedTime = timeSelect.value;
+                    const apiUrl = `https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/${selectedTime}?orderby=marketcap&direction=desc&filters[]=renounced&filters[]=frozen`;
+                    statusContainer.innerHTML = `正在获取GMGN热门(所有)数据...<br>API: ${apiUrl}`;
 
                     const response = await new Promise((resolve, reject) => {
                         GM_xmlhttpRequest({
                             method: 'GET',
-                            url: 'https://gmgn.ai/defi/quotation/v1/rank/sol/swaps/24h?orderby=marketcap&direction=desc&filters[]=renounced&filters[]=frozen',
+                            url: apiUrl,
                             headers: {
                                 'Accept': 'application/json',
                                 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
                                 'Origin': 'https://gmgn.ai',
-                                'Referer': 'https://gmgn.ai/',
-                                'Sec-Fetch-Dest': 'empty',
-                                'Sec-Fetch-Mode': 'cors',
-                                'Sec-Fetch-Site': 'cross-site'
+                                'Referer': 'https://gmgn.ai/'
                             },
-                            onload: (response) => {
-                                try {
-                                    const contentType = response.responseHeaders.match(/content-type:\s*(.*?)(?:\r\n|\r|\n|$)/i);
-                                    if (contentType && contentType[1].includes('application/json')) {
-                                        resolve(response);
-                                    } else {
-                                        DebugLogger.log(`API返回的不是JSON格式: ${contentType ? contentType[1] : '未知类型'}`, CONFIG.DEBUG_LEVEL.ERROR);
-                                        reject(new Error('API返回的不是JSON格式'));
-                                    }
-                                } catch (error) {
-                                    reject(error);
-                                }
-                            },
+                            onload: (response) => resolve(response),
                             onerror: (error) => reject(error)
                         });
                     });
 
                     const responseData = JSON.parse(response.responseText);
-
-                    // 添加详细的数据结构检查和错误报告
-                    if (typeof responseData !== 'object') {
-                        throw new Error(`返回数据不是对象，而是 ${typeof responseData}`);
+                    if (responseData.code !== 0 || !responseData.data || !responseData.data.rank) {
+                        throw new Error('API返回数据格式错误');
                     }
 
-                    if (responseData.code !== 0) {
-                        throw new Error(`API返回错误代码: ${responseData.code}, 消息: ${responseData.msg}`);
-                    }
-
-                    if (!responseData.data) {
-                        throw new Error('返回数据缺少 data 字段');
-                    }
-
-                    if (!responseData.data.rank || !Array.isArray(responseData.data.rank)) {
-                        throw new Error(`data.rank 不是数组: ${JSON.stringify(responseData.data)}`);
-                    }
-
-                    DebugLogger.log(`成功获取数据：总计 ${responseData.data.rank.length} 条记录`, CONFIG.DEBUG_LEVEL.INFO);
-
-                    // 使用 data.rank 作为数据源
                     const data = responseData.data.rank;
-
-                    // 过滤数据
-                    const filteredData = data.filter(item =>
-                        item.holder_count > 3000 &&
-                        item.market_cap > 1000000
-                    );
-
-                    DebugLogger.log(`过滤后剩余 ${filteredData.length} 条记录`, CONFIG.DEBUG_LEVEL.INFO);
-
                     gmgnTableContainer.style.display = 'block';
                     gmgnTableContainer.innerHTML = '';
-                    gmgnTableContainer.appendChild(createGmgnTable(filteredData));
-
-                    // 添加批量采集按钮
-                    const batchCollectSelectedButton = document.createElement('button');
-                    batchCollectSelectedButton.textContent = '采集选中项';
-                    batchCollectSelectedButton.style.cssText = `
-                        margin-top: 10px;
-                        padding: 10px 20px;
-                        background: #4CAF50;
-                        color: white;
-                        border: none;
-                        border-radius: 5px;
-                        cursor: pointer;
-                    `;
-
-                    batchCollectSelectedButton.onclick = () => {
-                        const selectedCAs = Array.from(gmgnTableContainer.querySelectorAll('.tokenCheckbox:checked'))
-                            .map(cb => cb.dataset.ca);
-
-                        if (selectedCAs.length === 0) {
-                            alert('请至少选择一个代币');
-                            return;
-                        }
-
-                        textarea.value = selectedCAs.join('\n');
-                        gmgnTableContainer.style.display = 'none';
-                        statusContainer.innerHTML = '';
-                    };
-
-                    gmgnTableContainer.appendChild(batchCollectSelectedButton);
+                    gmgnTableContainer.appendChild(createGmgnTable(data));
                     statusContainer.innerHTML = '数据加载完成，请选择要采集的代币';
 
                 } catch (error) {
                     statusContainer.innerHTML = `获取数据失败: ${error.message}`;
                     console.error('GMGN数据获取失败:', error);
                 } finally {
-                    gmgnHotButton.disabled = false;
-                    gmgnHotButton.textContent = 'GMGN 24H热点';
+                    gmgnAllButton.disabled = false;
+                    gmgnAllButton.textContent = 'GMGN热门(所有)';
                 }
             };
 
+            // GMGN热门(PUMP)按钮点击事件
+            gmgnPumpButton.onclick = async () => {
+                try {
+                    gmgnPumpButton.disabled = true;
+                    gmgnPumpButton.textContent = '加载中...';
+                    const selectedTime = timeSelect.value;
+                    const minHolders = parseFloat(holderInput.value) * 1000; // 转换为实际数量
+                    const minMarketCap = parseFloat(marketCapInput.value) * 1000000; // 转换为实际数量
+
+                    const apiUrl = `https://gmgn.ai/defi/quotation/v1/rank/sol/pump/${selectedTime}?limit=30&orderby=progress&direction=desc&interval=${selectedTime}&trend=true`;
+
+                    // 记录查询条件
+                    const queryInfo = `
+                        查询条件:
+                        - 时间: ${selectedTime}
+                        - 最小持有人: ${minHolders.toLocaleString()}
+                        - 最小市值: $${minMarketCap.toLocaleString()}
+                        - 查询URL: ${apiUrl}
+                    `;
+                    statusContainer.innerHTML = `正在获取GMGN热门(PUMP)数据...<br>${queryInfo}`;
+                    DebugLogger.log(queryInfo, CONFIG.DEBUG_LEVEL.INFO);
+
+                    const response = await new Promise((resolve, reject) => {
+                        GM_xmlhttpRequest({
+                            method: 'GET',
+                            url: apiUrl,
+                            headers: {
+                                'Accept': 'application/json',
+                                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                                'Origin': 'https://gmgn.ai',
+                                'Referer': 'https://gmgn.ai/'
+                            },
+                            onload: (response) => resolve(response),
+                            onerror: (error) => reject(error)
+                        });
+                    });
+
+                    const responseData = JSON.parse(response.responseText);
+                    if (responseData.code !== 0 || !responseData.data || !responseData.data.rank) {
+                        throw new Error('API返回数据格式错误');
+                    }
+
+                    // 在前端进行数据过滤
+                    const data = responseData.data.rank.filter(item => {
+                        const holderCount = item.holder_count || 0;
+                        const marketCap = parseFloat(item.market_cap || item.usd_market_cap || 0);
+                        return holderCount >= minHolders && marketCap >= minMarketCap;
+                    });
+
+                    DebugLogger.log(`API返回数据: ${responseData.data.rank.length}条记录，过滤后: ${data.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+
+                    // 确保表格容器可见
+                    gmgnTableContainer.style.display = 'block';
+                    gmgnTableContainer.style.visibility = 'visible';
+                    gmgnTableContainer.style.opacity = '1';
+                    gmgnTableContainer.innerHTML = '';
+
+                    // 创建表格并添加到容器
+                    const tableElement = createGmgnTable(data);
+                    DebugLogger.log(`创建的表格元素: ${tableElement.outerHTML.substring(0, 200)}...`, CONFIG.DEBUG_LEVEL.INFO);
+                    gmgnTableContainer.appendChild(tableElement);
+
+                    // 更新状态显示
+                    statusContainer.innerHTML = `${queryInfo}<br>查询结果: 共${data.length}条记录`;
+
+                } catch (error) {
+                    const errorMsg = `获取数据失败: ${error.message}`;
+                    statusContainer.innerHTML = errorMsg;
+                    DebugLogger.log(errorMsg, CONFIG.DEBUG_LEVEL.ERROR);
+                } finally {
+                    gmgnPumpButton.disabled = false;
+                    gmgnPumpButton.textContent = 'GMGN热门(PUMP)';
+                }
+            };
+
+            // 移除应用筛选按钮点击事件和相关代码
+            // filterContainer.removeChild(applyFilterButton);
+
             // 组装UI
+            filterContainer.appendChild(timeSelect);
+
+
+            //buttonContainer.appendChild(filterContainer);
+
             buttonContainer.appendChild(startButton);
-            buttonContainer.appendChild(gmgnHotButton);
+            buttonContainer.appendChild(gmgnAllButton);
+            buttonContainer.appendChild(gmgnPumpButton);
             buttonContainer.appendChild(closeButton);
 
             leftPanel.appendChild(title);
             leftPanel.appendChild(textarea);
-            leftPanel.appendChild(buttonContainer);
+
+            //rightPanel.appendChild(filterContainer);
+
+            filterContainer.appendChild(buttonContainer);
+
+            rightPanel.appendChild(filterContainer);
 
             rightPanel.appendChild(statusTitle);
             rightPanel.appendChild(statusContainer);
