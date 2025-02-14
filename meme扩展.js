@@ -11,6 +11,9 @@
 (function() {
     'use strict';
 
+    // 存储已处理的地址
+    const processedAddresses = new Set();
+
     // 处理页面上的文本节点,查找并添加按钮
     function processTextNodes(node) {
         // 跳过已处理的节点
@@ -21,7 +24,7 @@
         // 处理文本节点
         if (node.nodeType === 3) {
             const text = node.nodeValue;
-            // 匹配Solana地址格式 - 改进匹配模式
+            // 匹配Solana地址格式
             const matches = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/g) || [];
             
             if (matches.length > 0) {
@@ -29,6 +32,11 @@
                 let lastIndex = 0;
                 
                 matches.forEach(match => {
+                    // 如果地址已经处理过，跳过
+                    if (processedAddresses.has(match)) {
+                        return;
+                    }
+                    
                     const index = text.indexOf(match, lastIndex);
                     // 添加之前的文本
                     if (index > lastIndex) {
@@ -54,6 +62,9 @@
                     span.appendChild(addressSpan);
                     
                     lastIndex = index + match.length;
+                    
+                    // 标记该地址已处理
+                    processedAddresses.add(match);
                 });
                 
                 // 添加剩余文本
@@ -68,7 +79,7 @@
             if (node.hasAttribute('href')) {
                 const href = node.getAttribute('href');
                 const matches = href.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/g);
-                if (matches) {
+                if (matches && !processedAddresses.has(matches[0])) {
                     // 为链接添加按钮
                     const button = document.createElement('button');
                     button.textContent = '查';
@@ -79,6 +90,8 @@
                     };
                     if (!node.nextSibling || node.nextSibling.tagName !== 'BUTTON') {
                         node.parentNode.insertBefore(button, node.nextSibling);
+                        // 标记该地址已处理
+                        processedAddresses.add(matches[0]);
                     }
                 }
             }
@@ -113,7 +126,11 @@
     }
 
     // 页面加载完成后处理
-    window.addEventListener('load', processPage);
+    window.addEventListener('load', () => {
+        // 清空已处理地址集合
+        processedAddresses.clear();
+        processPage();
+    });
 
     // 使用防抖来限制处理频率
     function debounce(func, wait) {
@@ -126,6 +143,8 @@
 
     // 监听DOM变化
     const observer = new MutationObserver(debounce(() => {
+        // 清空已处理地址集合
+        processedAddresses.clear();
         processPage();
     }, 500));
 
