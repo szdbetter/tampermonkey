@@ -13,6 +13,51 @@
 
     // 存储已处理的地址
     const processedAddresses = new Set();
+    let lastUrl = location.href;
+
+    // 获取父元素的样式
+    function getParentStyles(element) {
+        const computedStyle = window.getComputedStyle(element);
+        return {
+            fontSize: computedStyle.fontSize,
+            lineHeight: computedStyle.lineHeight,
+            color: computedStyle.color,
+            fontFamily: computedStyle.fontFamily
+        };
+    }
+
+    // 创建按钮并应用样式
+    function createButton(match, parentElement) {
+        const button = document.createElement('button');
+        button.textContent = '查';
+        
+        // 获取父元素样式
+        const parentStyles = getParentStyles(parentElement);
+        
+        // 设置基础样式
+        button.style.cssText = `
+            margin-left: 4px;
+            padding: 1px 4px;
+            border-radius: 4px;
+            background: #5C6068;
+            color: white;
+            cursor: pointer;
+            border: none;
+            font-size: ${parentStyles.fontSize};
+            line-height: ${parentStyles.lineHeight};
+            font-family: ${parentStyles.fontFamily};
+            vertical-align: middle;
+            min-width: auto;
+            min-height: auto;
+        `;
+
+        button.onclick = function(e) {
+            e.stopPropagation();
+            copyAddress(match);
+        };
+
+        return button;
+    }
 
     // 处理页面上的文本节点,查找并添加按钮
     function processTextNodes(node) {
@@ -49,13 +94,7 @@
                     addressSpan.setAttribute('data-processed', 'true');
                     
                     // 创建查按钮
-                    const button = document.createElement('button');
-                    button.textContent = '查';
-                    button.style.cssText = 'margin-left: 4px; padding: 2px 8px; border-radius: 4px; background: #5C6068; color: white; cursor: pointer;';
-                    button.onclick = function(e) {
-                        e.stopPropagation();
-                        copyAddress(match);
-                    };
+                    const button = createButton(match, node.parentNode);
                     
                     // 将地址和按钮添加到容器中
                     addressSpan.appendChild(button);
@@ -81,13 +120,7 @@
                 const matches = href.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/g);
                 if (matches && !processedAddresses.has(matches[0])) {
                     // 为链接添加按钮
-                    const button = document.createElement('button');
-                    button.textContent = '查';
-                    button.style.cssText = 'margin-left: 4px; padding: 2px 8px; border-radius: 4px; background: #5C6068; color: white; cursor: pointer;';
-                    button.onclick = function(e) {
-                        e.stopPropagation();
-                        copyAddress(matches[0]);
-                    };
+                    const button = createButton(matches[0], node);
                     if (!node.nextSibling || node.nextSibling.tagName !== 'BUTTON') {
                         node.parentNode.insertBefore(button, node.nextSibling);
                         // 标记该地址已处理
@@ -120,17 +153,47 @@
         console.log('[GMGN扩展] 完整地址:', address);
     }
 
+    // 重置并处理页面
+    function resetAndProcessPage() {
+        processedAddresses.clear();
+        processTextNodes(document.body);
+    }
+
     // 处理整个页面
     function processPage() {
         processTextNodes(document.body);
     }
 
+    // 监听URL变化
+    function checkUrlChange() {
+        if (lastUrl !== location.href) {
+            lastUrl = location.href;
+            resetAndProcessPage();
+        }
+    }
+
     // 页面加载完成后处理
-    window.addEventListener('load', () => {
-        // 清空已处理地址集合
-        processedAddresses.clear();
-        processPage();
-    });
+    window.addEventListener('load', resetAndProcessPage);
+
+    // 监听URL变化
+    setInterval(checkUrlChange, 1000);
+
+    // 监听popstate事件（处理浏览器前进/后退）
+    window.addEventListener('popstate', resetAndProcessPage);
+
+    // 监听pushState和replaceState
+    const pushState = history.pushState;
+    const replaceState = history.replaceState;
+    
+    history.pushState = function() {
+        pushState.apply(history, arguments);
+        resetAndProcessPage();
+    };
+    
+    history.replaceState = function() {
+        replaceState.apply(history, arguments);
+        resetAndProcessPage();
+    };
 
     // 使用防抖来限制处理频率
     function debounce(func, wait) {
@@ -143,9 +206,7 @@
 
     // 监听DOM变化
     const observer = new MutationObserver(debounce(() => {
-        // 清空已处理地址集合
-        processedAddresses.clear();
-        processPage();
+        resetAndProcessPage();
     }, 500));
 
     observer.observe(document.body, {
