@@ -14,6 +14,7 @@
     // 存储已处理的地址
     const processedAddresses = new Set();
     let lastUrl = location.href;
+    let isProcessing = false;
 
     // 获取父元素的样式
     function getParentStyles(element) {
@@ -22,7 +23,8 @@
             fontSize: computedStyle.fontSize,
             lineHeight: computedStyle.lineHeight,
             color: computedStyle.color,
-            fontFamily: computedStyle.fontFamily
+            fontFamily: computedStyle.fontFamily,
+            display: computedStyle.display
         };
     }
 
@@ -30,29 +32,38 @@
     function createButton(match, parentElement) {
         const button = document.createElement('button');
         button.textContent = '查';
+        button.className = 'gmgn-search-button';
         
         // 获取父元素样式
         const parentStyles = getParentStyles(parentElement);
+        const fontSize = parseInt(parentStyles.fontSize) || 12;
         
         // 设置基础样式
         button.style.cssText = `
-            margin-left: 4px;
-            padding: 1px 4px;
+            margin: 0 4px;
+            padding: 0 4px;
             border-radius: 4px;
             background: #5C6068;
             color: white;
             cursor: pointer;
             border: none;
-            font-size: ${parentStyles.fontSize};
-            line-height: ${parentStyles.lineHeight};
+            font-size: ${Math.min(fontSize, 14)}px;
+            line-height: ${Math.min(fontSize + 4, 18)}px;
             font-family: ${parentStyles.fontFamily};
-            vertical-align: middle;
+            vertical-align: baseline;
+            display: inline-block;
             min-width: auto;
             min-height: auto;
+            position: relative;
+            top: -1px;
+            white-space: nowrap;
+            text-decoration: none;
+            user-select: none;
         `;
 
         button.onclick = function(e) {
             e.stopPropagation();
+            e.preventDefault();
             copyAddress(match);
         };
 
@@ -61,6 +72,8 @@
 
     // 处理页面上的文本节点,查找并添加按钮
     function processTextNodes(node) {
+        if (isProcessing) return;
+        
         // 跳过已处理的节点
         if (node.getAttribute && node.getAttribute('data-processed')) {
             return;
@@ -74,6 +87,7 @@
             
             if (matches.length > 0) {
                 const span = document.createElement('span');
+                span.style.whiteSpace = 'nowrap';
                 let lastIndex = 0;
                 
                 matches.forEach(match => {
@@ -90,6 +104,7 @@
                     
                     // 创建地址容器
                     const addressSpan = document.createElement('span');
+                    addressSpan.style.whiteSpace = 'nowrap';
                     addressSpan.textContent = match;
                     addressSpan.setAttribute('data-processed', 'true');
                     
@@ -155,45 +170,39 @@
 
     // 重置并处理页面
     function resetAndProcessPage() {
-        processedAddresses.clear();
-        processTextNodes(document.body);
+        if (isProcessing) return;
+        isProcessing = true;
+        
+        try {
+            // 移除所有现有的查按钮
+            document.querySelectorAll('.gmgn-search-button').forEach(btn => btn.remove());
+            // 清除处理标记
+            document.querySelectorAll('[data-processed]').forEach(el => el.removeAttribute('data-processed'));
+            // 清空已处理地址集合
+            processedAddresses.clear();
+            // 重新处理页面
+            processTextNodes(document.body);
+        } finally {
+            isProcessing = false;
+        }
     }
 
     // 处理整个页面
     function processPage() {
+        if (isProcessing) return;
         processTextNodes(document.body);
     }
 
     // 监听URL变化
     function checkUrlChange() {
-        if (lastUrl !== location.href) {
-            lastUrl = location.href;
-            resetAndProcessPage();
+        const currentUrl = location.href;
+        if (lastUrl !== currentUrl) {
+            console.log('[GMGN扩展] URL变化，重新处理页面');
+            lastUrl = currentUrl;
+            // 延迟处理以等待页面内容加载
+            setTimeout(resetAndProcessPage, 500);
         }
     }
-
-    // 页面加载完成后处理
-    window.addEventListener('load', resetAndProcessPage);
-
-    // 监听URL变化
-    setInterval(checkUrlChange, 1000);
-
-    // 监听popstate事件（处理浏览器前进/后退）
-    window.addEventListener('popstate', resetAndProcessPage);
-
-    // 监听pushState和replaceState
-    const pushState = history.pushState;
-    const replaceState = history.replaceState;
-    
-    history.pushState = function() {
-        pushState.apply(history, arguments);
-        resetAndProcessPage();
-    };
-    
-    history.replaceState = function() {
-        replaceState.apply(history, arguments);
-        resetAndProcessPage();
-    };
 
     // 使用防抖来限制处理频率
     function debounce(func, wait) {
@@ -204,13 +213,62 @@
         };
     }
 
-    // 监听DOM变化
-    const observer = new MutationObserver(debounce(() => {
-        resetAndProcessPage();
-    }, 500));
+    // 处理滚动事件
+    const handleScroll = debounce(() => {
+        console.log('[GMGN扩展] 页面滚动，检查新内容');
+        processPage();
+    }, 200);
 
-    observer.observe(document.body, {
-        childList: true,
-        subtree: true
-    });
+    // 初始化
+    function initialize() {
+        // 页面加载完成后处理
+        resetAndProcessPage();
+        
+        // 监听URL变化
+        setInterval(checkUrlChange, 500);
+        
+        // 监听popstate事件（处理浏览器前进/后退）
+        window.addEventListener('popstate', () => {
+            console.log('[GMGN扩展] 检测到页面导航');
+            setTimeout(resetAndProcessPage, 500);
+        });
+        
+        // 监听pushState和replaceState
+        const originalPushState = history.pushState;
+        history.pushState = function() {
+            originalPushState.apply(history, arguments);
+            console.log('[GMGN扩展] 检测到pushState');
+            setTimeout(resetAndProcessPage, 500);
+        };
+        
+        const originalReplaceState = history.replaceState;
+        history.replaceState = function() {
+            originalReplaceState.apply(history, arguments);
+            console.log('[GMGN扩展] 检测到replaceState');
+            setTimeout(resetAndProcessPage, 500);
+        };
+        
+        // 监听滚动
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        
+        // 监听DOM变化
+        const observer = new MutationObserver(debounce(() => {
+            console.log('[GMGN扩展] 检测到DOM变化');
+            processPage();
+        }, 200));
+
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true
+        });
+    }
+
+    // 启动初始化
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initialize);
+    } else {
+        initialize();
+    }
 })();
+
