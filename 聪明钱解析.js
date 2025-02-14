@@ -28,7 +28,7 @@
         MIN_REALIZED_PROFIT: 3000,
 
         // 最大保留交易者数量
-        MAX_TRADERS: 30,
+        MAX_TRADERS: 50,
 
         // 调试日志级别
         DEBUG_LEVEL: {
@@ -255,10 +255,11 @@
                             buy_volume: trader.buy_volume,
                             sell_volume: trader.sell_volume,
                             realized_profit: trader.realized_profit,
+                            unrealized_profit: trader.unrealized_profit,
                             twitter_username: trader.twitter_username,
                             user_name: trader.user_name,
                             profit_tag: trader.profit_tag,
-                            update_time: trader.update_time,
+                            update_time: trader.update_time, // 确保更新时间戳被更新
 
                             // 新增字段
                             dev: trader.dev,
@@ -309,7 +310,7 @@
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
                 '持有时长(分钟)', '买入金额', '卖出金额', '实现利润', '未实现利润',
-                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
+                'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
             ]); // 默认全选
         }
 
@@ -527,7 +528,7 @@
 
                 // 打印前5条数据的详细信息
                 const previewData = filteredData.slice(0, 5).map((item, index) => ({
-                    '排名': index + 1,
+                    '利润排名': index + 1,
                     'Address': item.address,
                     '买入量': Math.round(item.buy_volume_cur || 0),
                     '卖出量': Math.round(item.sell_volume_cur || 0),
@@ -580,7 +581,6 @@
                         tag_1: '',
                         tag_2: '',
                         tag_3: '',
-                        update_time: this.getBeijingTime(),
                         dev: this.tokenName.dev,
                         create_time: this.tokenName.created_timestamp,
                         launch_time: this.tokenName.launch_time ? new Date(this.tokenName.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
@@ -594,6 +594,8 @@
                         buy_after_launch_interval: buyAfterLaunchInterval
                     };
 
+                    // 在实际写入数据库时设置update_time
+                    trader.update_time = this.getBeijingTime();
                     await this.db.upsertTrader(trader);
                     processedTraders.push(trader);
                     this.updateProgressBar(70 + (index + 1) / filteredData.length * 30);
@@ -956,12 +958,26 @@
                 const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
                 const store = transaction.objectStore(this.db.storeName);
 
-                // 获取所有记录以计算总数
-                const getAllRequest = store.getAll();
+                // 使用update_time索引
+                const index = store.index('update_time');
+                const request = index.getAll();
 
-                getAllRequest.onsuccess = () => {
+                request.onsuccess = () => {
                     try {
-                        const allRecords = getAllRequest.result;
+                        const allRecords = request.result;
+
+                        // 按照update_time倒序排序
+                        allRecords.sort((a, b) => {
+                            const timeA = new Date(a.update_time);
+                            const timeB = new Date(b.update_time);
+                            return timeB - timeA;
+                        });
+
+                        // 应用查询过滤
+                        const filteredRecords = allRecords.filter(record =>
+                            !queryType || !queryValue || this.matchesQuery(record, queryType, queryValue)
+                        );
+
                         const uniqueTokens = new Set(allRecords.map(record => record.token));
                         const totalRecords = allRecords.length;
                         const totalTokens = uniqueTokens.size;
@@ -970,93 +986,40 @@
                         const title = this.dataViewerModal.querySelector('h2');
                         title.textContent = `聪明钱数据库 (总计${totalTokens}个代币，${totalRecords}条记录)`;
 
-                        // 继续原有的分页逻辑
-                        const countRequest = store.count();
+                        // 计算分页
+                        this.totalPages = Math.ceil(filteredRecords.length / this.pageSize);
+                        const startIndex = (this.currentPage - 1) * this.pageSize;
+                        const pageData = filteredRecords.slice(startIndex, startIndex + this.pageSize);
 
-                        countRequest.onerror = (event) => {
-                            const error = `获取记录数失败: ${event.target.error}`;
-                            DebugLogger.log(error, 'error');
-                            throw new Error(error);
-                        };
+                        // 清除加载提示
+                        const loadingIndicator = tableContainer.querySelector('.loading-indicator');
+                        if (loadingIndicator) {
+                            loadingIndicator.remove();
+                        }
 
-                        countRequest.onsuccess = (event) => {
-                            try {
-                                const totalRecords = event.target.result;
-                                DebugLogger.log(`总记录数: ${totalRecords}`, 'info');
-                                this.totalPages = Math.ceil(totalRecords / this.pageSize);
+                        // 渲染数据和分页控件
+                        DebugLogger.log(`本页加载完成，共 ${pageData.length} 条记录`, 'info');
+                        this.renderTableWithData(pageData, tableContainer);
 
-                                // 获取当前页的数据
-                                const offset = (this.currentPage - 1) * this.pageSize;
-                                const cursorRequest = store.openCursor();
-                                const pageData = [];
-                                let count = 0;
+                        // 移除旧的分页控件
+                        const oldPagination = this.dataViewerModal.querySelector('.pagination-container');
+                        if (oldPagination) {
+                            oldPagination.remove();
+                        }
 
-                                cursorRequest.onerror = (event) => {
-                                    const error = `打开游标失败: ${event.target.error}`;
-                                    DebugLogger.log(error, 'error');
-                                    throw new Error(error);
-                                };
+                        // 渲染新的分页控件
+                        this.renderPagination(filteredRecords.length);
 
-                                cursorRequest.onsuccess = (event) => {
-                                    try {
-                                        const cursor = event.target.result;
-                                        if (cursor && count < offset) {
-                                            count++;
-                                            cursor.continue();
-                                        } else if (cursor && pageData.length < this.pageSize) {
-                                            // 应用查询过滤
-                                            const trader = cursor.value;
-                                            if (!queryType || !queryValue || this.matchesQuery(trader, queryType, queryValue)) {
-                                                pageData.push(trader);
-                                                DebugLogger.log(`加载记录: ${trader.ca} - ${trader.address}`, 'info');
-                                            }
-                                            cursor.continue();
-                                        } else {
-                                            // 清除加载提示
-                                            const loadingIndicator = tableContainer.querySelector('.loading-indicator');
-                                            if (loadingIndicator) {
-                                                loadingIndicator.remove();
-                                            }
-
-                                            // 渲染数据和分页控件
-                                            DebugLogger.log(`本页加载完成，共 ${pageData.length} 条记录`, 'info');
-                                            this.renderTableWithData(pageData, tableContainer);
-
-                                            // 移除旧的分页控件
-                                            const oldPagination = this.dataViewerModal.querySelector('.pagination-container');
-                                            if (oldPagination) {
-                                                oldPagination.remove();
-                                            }
-
-                                            // 渲染新的分页控件
-                                            this.renderPagination(totalRecords);
-
-                                            const duration = endTimer();
-                                            DebugLogger.log(`数据加载耗时: ${duration.toFixed(2)}ms`, 'info');
-                                        }
-                                    } catch (error) {
-                                        DebugLogger.log(`处理游标数据失败: ${error}`, 'error');
-                                        tableContainer.innerHTML = `
-                                            <div style="text-align: center; padding: 20px; color: #f44336;">
-                                                <div>数据处理失败: ${error.message || '未知错误'}</div>
-                                                <button onclick="location.reload()" style="margin-top: 10px; padding: 5px 10px;">刷新页面</button>
-                                            </div>
-                                        `;
-                                    }
-                                };
-                            } catch (error) {
-                                DebugLogger.log(`处理记录数据失败: ${error}`, 'error');
-                                throw error;
-                            }
-                        };
+                        const duration = endTimer();
+                        DebugLogger.log(`数据加载耗时: ${duration.toFixed(2)}ms`, 'info');
 
                     } catch (error) {
-                        DebugLogger.log(`获取数据失败: ${error}`, 'error');
+                        DebugLogger.log(`处理数据失败: ${error}`, 'error');
                         throw error;
                     }
                 };
 
-                getAllRequest.onerror = (event) => {
+                request.onerror = (event) => {
                     DebugLogger.log(`获取数据失败: ${event.target.error}`, 'error');
                     throw event.target.error;
                 };
@@ -1170,7 +1133,7 @@
                 '未实现利润': '70px',
                 'Twitter': '50px',
                 '用户名': '50px',
-                '排名': '30px',
+                '利润排名': '30px',
                 '标签1': '50px',
                 '标签2': '50px',
                 '标签3': '50px',
@@ -1204,7 +1167,7 @@
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
                 '买入金额', '卖出金额', '实现利润', '未实现利润',
-                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
+                'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
             headers.forEach((headerText, index) => {
@@ -1372,10 +1335,10 @@
                         td.dataset.originalValue = cellData;
 
                         // 可编辑的列（除了某些特殊列）
-                        const editableColumns = [ 1, 4, 16, 17, 18, 19, 20]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
+                        const editableColumns = [ 1, 4, 16, 17, 19, 20, 21]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
 
                         // 处理Twitter链接
-                        if (index === 15 && cellData !== 'N/A') {  // Twitter列
+                        if (index === 16 && cellData !== 'N/A') {  // Twitter列
                             const link = document.createElement('a');
                             link.href = `https://x.com/${cellData}`;
                             link.target = '_blank';
@@ -1522,9 +1485,9 @@
                                                     }
                                                     break;
 
-                                                case 18: // tag_1
-                                                case 19: // tag_2
-                                                case 20: // tag_3
+                                                case 19: // tag_1
+                                                case 20: // tag_2
+                                                case 21: // tag_3
                                                     {
                                                         addressIndex = store.index('address');
                                                         addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
@@ -2072,11 +2035,10 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     unrealized_profit: Math.round(item.unrealized_profit) || 0,
                     twitter_username: item.twitter_username || '',
                     user_name: item.name || '',
-                    profit_tag: i + 1, // 使用循环的索引i代替之前未定义的index
+                    profit_tag: i + 1,
                     tag_1: '',
                     tag_2: '',
                     tag_3: '',
-                    update_time: this.getBeijingTime(),
                     dev: tokenInfo.dev,
                     create_time: tokenInfo.created_timestamp,
                     launch_time: tokenInfo.launch_time ? new Date(tokenInfo.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
@@ -2090,15 +2052,34 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     buy_after_launch_interval: buyAfterLaunchInterval
                 };
 
-                // 检查是否存在
-                const exists = await this.checkTraderExists(ca, item.address);
-                if (exists) {
-                    updated++;
-                } else {
-                    inserted++;
+                // 在实际写入数据库时设置update_time
+                trader.update_time = this.getBeijingTime();
+
+                try {
+                    const transaction = this.db.db.transaction([this.db.storeName], 'readonly');
+                    const store = transaction.objectStore(this.db.storeName);
+                    const index = store.index('ca_address');
+                    const request = index.get(IDBKeyRange.only([ca, item.address]));
+
+                    await new Promise((resolve, reject) => {
+                        request.onsuccess = () => {
+                            const existingTrader = request.result;
+                            if (existingTrader) {
+                                updated++;
+                                DebugLogger.log(`更新聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
+                            } else {
+                                inserted++;
+                                DebugLogger.log(`新增聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
+                            }
+                            resolve();
+                        };
+                        request.onerror = () => reject(request.error);
+                    });
+
+                    await this.db.upsertTrader(trader);
+                } catch (error) {
+                    DebugLogger.log(`处理记录失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
                 }
-                await this.db.upsertTrader(trader);
-                DebugLogger.log(`处理记录: ${exists ? '更新' : '新增'} CA=${ca}, Address=${item.address}`, CONFIG.DEBUG_LEVEL.INFO);
             }
 
             return { inserted, updated };
@@ -2689,7 +2670,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
                 '持有时长(分钟)', '买入金额', '卖出金额', '实现利润', '未实现利润',
-                'Twitter', '用户名', '排名', '标签1', '标签2', '标签3', '更新时间'
+                'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
             // 创建全选/取消全选按钮
