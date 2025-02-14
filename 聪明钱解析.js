@@ -670,7 +670,7 @@
                             twitter_username: row['Twitter'],
                             user_name: row['用户名'],
                             profit_tag: parseInt(row['利润排名']),
-                            update_time: row['更新时间'],
+                            update_time: this.getBeijingTime(), // 使用当前时间而不是Excel中的时间
 
                             // 新增 buy_after_launch_interval 字段
                             buy_after_launch_interval: row['Pump到买入(秒)'] !== 'N/A' ? parseInt(row['Pump到买入(秒)']) : null
