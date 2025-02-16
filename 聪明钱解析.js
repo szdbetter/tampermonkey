@@ -30,6 +30,9 @@
         // 最大保留交易者数量
         MAX_TRADERS: 50,
 
+        // 最后活跃天数（默认7天）
+        LAST_ACTIVE_DAYS: 7,
+
         // 调试日志级别
         DEBUG_LEVEL: {
             INFO: 'info',
@@ -603,9 +606,16 @@
                 }
 
                 // 过滤掉低于最低利润阈值的交易者
-                const filteredData = data.filter(item =>
-                    ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT
-                ).sort((a, b) =>
+                const filteredData = data.filter(item => {
+                    // 检查最后活跃时间
+                    const lastActiveTimestamp = item.last_active_timestamp;
+                    const now = Math.floor(Date.now() / 1000);
+                    const daySeconds = 24 * 60 * 60;
+                    const lastActiveDays = Math.floor((now - lastActiveTimestamp) / daySeconds);
+
+                    return ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT 
+                        && lastActiveDays <= CONFIG.LAST_ACTIVE_DAYS;
+                }).sort((a, b) =>
                     ((b.realized_profit || 0) + (b.unrealized_profit || 0)) -
                     ((a.realized_profit || 0) + (a.unrealized_profit || 0))
                 ).slice(0, CONFIG.MAX_TRADERS);
@@ -673,7 +683,7 @@
                         create_time: this.tokenName.created_timestamp,
                         launch_time: this.tokenName.launch_time ? new Date(this.tokenName.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
                         sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
-                        last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
+                        last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19) : null,
                         start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                         end_holding_at: item.end_holding_at
                             ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
@@ -1001,9 +1011,28 @@
                 document.body.appendChild(this.createTestWindow());
             };
 
+            // 在导出按钮后添加活跃天数输入框
+            const activeDaysContainer = document.createElement('div');
+            activeDaysContainer.style.cssText = 'display: flex; align-items: center; margin-left: 10px;';
+
+            const activeDaysLabel = document.createElement('label');
+            activeDaysLabel.textContent = '最后活跃天数：';
+            activeDaysLabel.style.marginRight = '5px';
+
+            const activeDaysInput = document.createElement('input');
+            activeDaysInput.type = 'number';
+            activeDaysInput.id = 'lastActiveDaysInput';
+            activeDaysInput.value = CONFIG.LAST_ACTIVE_DAYS;
+            activeDaysInput.min = '1';
+            activeDaysInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
+
+            activeDaysContainer.appendChild(activeDaysLabel);
+            activeDaysContainer.appendChild(activeDaysInput);
+
             buttonContainer.appendChild(importButton);
             buttonContainer.appendChild(fileInput);
             buttonContainer.appendChild(exportButton);
+            buttonContainer.appendChild(activeDaysContainer);
             buttonContainer.appendChild(closeButton);
             buttonContainer.appendChild(testDataSourceButton);
             this.dataViewerModal.appendChild(buttonContainer);
@@ -1739,7 +1768,25 @@
             const request = store.getAll();
 
             request.onsuccess = (event) => {
-                const traders = event.target.result;
+                const allTraders = event.target.result;
+                
+                // 获取活跃天数输入值
+                const activeDaysInput = document.querySelector('#lastActiveDaysInput');
+                const activeDays = parseInt(activeDaysInput?.value || CONFIG.LAST_ACTIVE_DAYS);
+                
+                // 筛选符合活跃天数的记录
+                const now = Math.floor(Date.now() / 1000);
+                const daySeconds = 24 * 60 * 60;
+                
+                const traders = allTraders.filter(trader => {
+                    if (!trader.last_active_time) return false;
+                    const lastActiveTime = new Date(trader.last_active_time).getTime() / 1000;
+                    const lastActiveDays = Math.floor((now - lastActiveTime) / daySeconds);
+                    return lastActiveDays <= activeDays;
+                });
+
+                DebugLogger.log(`数据库共有${allTraders.length}条记录，符合最后活跃${activeDays}天的有${traders.length}条记录`, CONFIG.DEBUG_LEVEL.INFO);
+
                 const worksheet = XLSX.utils.json_to_sheet(traders.map(trader => ({
                     '名称': trader.token,
                     '合约': trader.ca,
@@ -2105,9 +2152,16 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             let updated = 0;
 
             // 过滤和处理数据的逻辑
-            const filteredData = data.filter(item =>
-                ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT
-            ).sort((a, b) =>
+            const filteredData = data.filter(item => {
+                // 检查最后活跃时间
+                const lastActiveTimestamp = item.last_active_timestamp;
+                const now = Math.floor(Date.now() / 1000);
+                const daySeconds = 24 * 60 * 60;
+                const lastActiveDays = Math.floor((now - lastActiveTimestamp) / daySeconds);
+
+                return ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT 
+                    && lastActiveDays <= CONFIG.LAST_ACTIVE_DAYS;
+            }).sort((a, b) =>
                 ((b.realized_profit || 0) + (b.unrealized_profit || 0)) -
                 ((a.realized_profit || 0) + (a.unrealized_profit || 0))
             ).slice(0, CONFIG.MAX_TRADERS);
@@ -2161,7 +2215,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     create_time: tokenInfo.created_timestamp,
                     launch_time: tokenInfo.launch_time ? new Date(tokenInfo.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
                     sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
-                    last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
+                    last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19) : null,
                     start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                     end_holding_at: item.end_holding_at
                         ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
