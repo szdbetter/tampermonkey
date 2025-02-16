@@ -105,7 +105,7 @@
         log(message, type = 'info') {
             // 首先输出到控制台
             console.log(`[${type.toUpperCase()}] ${message}`);
-            
+
             try {
                 // 检查logElement是否存在
                 if (!this.logElement) {
@@ -153,7 +153,7 @@
                 const tableElement = document.createElement('div');
                 tableElement.style.color = '#0ff';
                 tableElement.innerHTML = `<strong>${title}:</strong>`;
-                
+
                 if (this.logElement) {
                     this.logElement.insertBefore(tableElement, this.logElement.firstChild);
                 }
@@ -175,7 +175,7 @@
             return new Promise(async (resolve, reject) => {
                 try {
                     DebugLogger.log('开始初始化SmartMoneyDatabase...', CONFIG.DEBUG_LEVEL.INFO);
-                    
+
                     // 检查浏览器支持
                     if (!window.indexedDB) {
                         const error = new Error('您的浏览器不支持 IndexedDB');
@@ -271,10 +271,10 @@
                                 try {
                                     const transaction = this.db.transaction([this.storeName], 'readonly');
                                     DebugLogger.log('创建只读事务成功', CONFIG.DEBUG_LEVEL.INFO);
-                                    
+
                                     const store = transaction.objectStore(this.storeName);
                                     DebugLogger.log('获取数据表成功', CONFIG.DEBUG_LEVEL.INFO);
-                                    
+
                                     const countRequest = store.count();
                                     DebugLogger.log('开始获取记录数...', CONFIG.DEBUG_LEVEL.INFO);
 
@@ -385,7 +385,7 @@
             this.tokenName = '';
             this.progressBar = null;
             this.dataViewerModal = null;
-            this.pageSize = 200; // 默认每页显示200条记录
+            this.pageSize = 150; // 默认每页显示150条记录
             this.currentPage = 1;
             this.totalPages = 1;
             this.performanceMonitor = new PerformanceMonitor();
@@ -1449,10 +1449,10 @@
                         td.dataset.originalValue = cellData;
 
                         // 可编辑的列（除了某些特殊列）
-                        const editableColumns = [ 1, 4, 16, 17, 19, 20, 21]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
+                        const editableColumns = [ 0, 3, 17, 18, 20, 21, 22]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
 
                         // 处理Twitter链接
-                        if (index === 16 && cellData !== 'N/A') {  // Twitter列
+                        if (index === 17 && cellData !== 'N/A') {  // Twitter列
                             const link = document.createElement('a');
                             link.href = `https://x.com/${cellData}`;
                             link.target = '_blank';
@@ -1575,8 +1575,8 @@
                                                     }
                                                     break;
 
-                                                case 16: // Twitter列
-                                                case 17: // 用户名列
+                                                case 17: // Twitter列
+                                                case 18: // 用户名列
                                                     {
                                                         // 获取所有相同address的记录
                                                         const addressIndex = store.index('address');
@@ -1585,7 +1585,7 @@
                                                         addressRequest.onsuccess = async () => {
                                                             const tradersWithSameAddress = addressRequest.result;
                                                             for (const trader of tradersWithSameAddress) {
-                                                                if (index === 15) {
+                                                                if (index === 17) {
                                                                     trader.twitter_username = newValue;
                                                                 } else {
                                                                     trader.user_name = newValue;
@@ -1599,13 +1599,13 @@
                                                     }
                                                     break;
 
-                                                case 19: // tag_1
-                                                case 20: // tag_2
-                                                case 21: // tag_3
+                                                case 20: // tag_1
+                                                case 21: // tag_2
+                                                case 22: // tag_3
                                                     {
                                                         addressIndex = store.index('address');
                                                         addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
-                                                        tagField = index === 18 ? 'tag_1' : (index === 19 ? 'tag_2' : 'tag_3');
+                                                        tagField = index === 20 ? 'tag_1' : (index === 21 ? 'tag_2' : 'tag_3');
 
                                                         addressRequest.onsuccess = async () => {
                                                             const tradersWithSameAddress = addressRequest.result;
@@ -1676,7 +1676,7 @@
                         `;
 
                         // 处理利润高亮
-                        if (index === 14 || index === 15) {// realized_profit或unrealized_profit列
+                        if (index === 15 || index === 16) {// realized_profit或unrealized_profit列
                             const profit = parseFloat(cellData.replace(/,/g, ''));
                             if (!isNaN(profit)) {// 确保转换后是有效数字
                                 if (profit >= 100000) {
@@ -3071,14 +3071,14 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             // 初始化调试日志
             DebugLogger.init();
             DebugLogger.log('开始初始化应用...', CONFIG.DEBUG_LEVEL.INFO);
-            
+
             // 检查页面加载状态
             DebugLogger.log(`当前页面状态: ${document.readyState}`, CONFIG.DEBUG_LEVEL.INFO);
-            
+
             // 如果页面已经加载完成，直接继续
             if (document.readyState === 'complete') {
                 DebugLogger.log('页面已完全加载，继续执行', CONFIG.DEBUG_LEVEL.INFO);
-            } 
+            }
             // 如果页面至少已经可交互，也继续执行
             else if (document.readyState === 'interactive') {
                 DebugLogger.log('页面已可交互，继续执行', CONFIG.DEBUG_LEVEL.INFO);
@@ -3106,9 +3106,9 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     }, 2000);
                 });
             }
-            
+
             DebugLogger.log('开始数据库初始化流程...', CONFIG.DEBUG_LEVEL.INFO);
-            
+
             // 检查数据库是否已存在
             try {
                 const databases = await indexedDB.databases();
@@ -3121,13 +3121,13 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 DebugLogger.log(`获取数据库列表失败: ${dbListError}`, CONFIG.DEBUG_LEVEL.ERROR);
                 DebugLogger.log(`错误堆栈: ${dbListError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
             }
-            
+
             DebugLogger.log('开始初始化数据库实例...', CONFIG.DEBUG_LEVEL.INFO);
-            
+
             // 初始化数据库
             const database = new SmartMoneyDatabase();
             DebugLogger.log('数据库实例创建完成，开始调用init方法...', CONFIG.DEBUG_LEVEL.INFO);
-            
+
             try {
                 await database.init();
                 DebugLogger.log('数据库初始化成功，开始创建收集器...', CONFIG.DEBUG_LEVEL.INFO);
@@ -3136,7 +3136,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 DebugLogger.log(`数据库错误堆栈: ${dbError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
                 throw dbError;
             }
-            
+
             // 创建收集器
             let collector;
             try {
@@ -3147,12 +3147,12 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 DebugLogger.log(`收集器错误堆栈: ${collectorError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
                 throw collectorError;
             }
-            
+
             // 创建UI
             try {
                 collector.createUI();
                 DebugLogger.log('基础UI创建完成', CONFIG.DEBUG_LEVEL.INFO);
-                
+
                 collector.createDataViewerUI();
                 DebugLogger.log('数据查看器UI创建完成', CONFIG.DEBUG_LEVEL.INFO);
             } catch (uiError) {
@@ -3160,18 +3160,18 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 DebugLogger.log(`UI错误堆栈: ${uiError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
                 throw uiError;
             }
-            
+
             // 保存实例
             window.currentCollector = collector;
             window.currentDB = database;
-            
+
             DebugLogger.log('初始化完成，所有组件已就绪', CONFIG.DEBUG_LEVEL.INFO);
             return true;
         } catch (error) {
             DebugLogger.log(`初始化失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
             DebugLogger.log(`错误堆栈: ${error.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
             console.error('初始化失败:', error);
-            
+
             // 尝试恢复
             try {
                 if (window.currentCollector) {
@@ -3187,11 +3187,11 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 DebugLogger.log(`清理失败: ${cleanupError.message}`, CONFIG.DEBUG_LEVEL.ERROR);
                 DebugLogger.log(`清理错误堆栈: ${cleanupError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
             }
-            
+
             return false;
         }
     }
-    
+
     // 确保在页面准备好后再初始化
     if (document.readyState === 'loading') {
         DebugLogger.log('页面正在加载，等待DOMContentLoaded事件...', CONFIG.DEBUG_LEVEL.INFO);
