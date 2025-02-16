@@ -33,13 +33,47 @@
         // 最后活跃天数（默认7天）
         LAST_ACTIVE_DAYS: 7,
 
-        // 调试日志级别
-        DEBUG_LEVEL: {
-            INFO: 'info',
-            WARNING: 'warning',
-            ERROR: 'error'
-        },
+        // 每页显示记录数
+        PAGE_SIZE: 50,
 
+        // 调试日志级别配置对象
+        // 当前支持的日志级别：
+        // 1. INFO：普通信息日志
+        //    - 用于记录程序正常运行的状态信息
+        //    - 例如：数据加载完成、记录更新成功等
+        //    - 显示为绿色文字
+        //
+        // 2. WARNING：警告信息日志
+        //    - 用于记录需要注意但不影响主要功能的问题
+        //    - 例如：性能警告、非关键操作超时等
+        //    - 显示为黄色文字
+        //
+        // 3. ERROR：错误信息日志
+        //    - 用于记录严重的程序错误信息
+        //    - 例如：数据库操作失败、API请求错误等
+        //    - 显示为红色文字
+        //
+        // 可以扩展的日志级别选项：
+        // 1. VERBOSE：详细日志
+        //    - 记录更详细的程序运行信息
+        //    - 用于深入调试和跟踪
+        //
+        // 2. DEBUG：调试日志
+        //    - 记录开发调试过程中的信息
+        //    - 仅在开发环境中使用
+        //
+        // 3. CRITICAL：致命错误日志
+        //    - 记录导致程序无法继续运行的严重错误
+        //    - 需要立即处理的系统级错误
+        //
+        // 4. TRACE：追踪日志
+        //    - 记录程序执行的详细步骤
+        //    - 用于性能分析和问题定位
+        DEBUG_LEVEL: {
+            INFO: 'info',         // 普通信息
+            WARNING: 'warning',   // 警告信息
+            ERROR: 'error'        // 错误信息
+        },
         // 外部API配置
         API: {
             TOKEN_SEARCH_URL: 'https://frontend-api-v3.pump.fun/coins/search',
@@ -388,7 +422,7 @@
             this.tokenName = '';
             this.progressBar = null;
             this.dataViewerModal = null;
-            this.pageSize = 150; // 默认每页显示150条记录
+            this.pageSize = CONFIG.PAGE_SIZE; // 使用CONFIG中的配置
             this.currentPage = 1;
             this.totalPages = 1;
             this.performanceMonitor = new PerformanceMonitor();
@@ -613,7 +647,7 @@
                     const daySeconds = 24 * 60 * 60;
                     const lastActiveDays = Math.floor((now - lastActiveTimestamp) / daySeconds);
 
-                    return ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT 
+                    return ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT
                         && lastActiveDays <= CONFIG.LAST_ACTIVE_DAYS;
                 }).sort((a, b) =>
                     ((b.realized_profit || 0) + (b.unrealized_profit || 0)) -
@@ -1016,7 +1050,7 @@
             activeDaysContainer.style.cssText = 'display: flex; align-items: center; margin-left: 10px;';
 
             const activeDaysLabel = document.createElement('label');
-            activeDaysLabel.textContent = '最后活跃天数：';
+            activeDaysLabel.textContent = '导出的最后活跃天数：';
             activeDaysLabel.style.marginRight = '5px';
 
             const activeDaysInput = document.createElement('input');
@@ -1024,7 +1058,7 @@
             activeDaysInput.id = 'lastActiveDaysInput';
             activeDaysInput.value = CONFIG.LAST_ACTIVE_DAYS;
             activeDaysInput.min = '1';
-            activeDaysInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
+            activeDaysInput.style.cssText = 'width: 30px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
 
             activeDaysContainer.appendChild(activeDaysLabel);
             activeDaysContainer.appendChild(activeDaysInput);
@@ -1769,15 +1803,15 @@
 
             request.onsuccess = (event) => {
                 const allTraders = event.target.result;
-                
+
                 // 获取活跃天数输入值
                 const activeDaysInput = document.querySelector('#lastActiveDaysInput');
                 const activeDays = parseInt(activeDaysInput?.value || CONFIG.LAST_ACTIVE_DAYS);
-                
+
                 // 筛选符合活跃天数的记录
                 const now = Math.floor(Date.now() / 1000);
                 const daySeconds = 24 * 60 * 60;
-                
+
                 const traders = allTraders.filter(trader => {
                     if (!trader.last_active_time) return false;
                     const lastActiveTime = new Date(trader.last_active_time).getTime() / 1000;
@@ -1797,6 +1831,7 @@
                     '最后活跃时间': trader.last_active_time || 'N/A',
                     '买入时间': trader.start_holding_at || 'N/A',
                     '卖出时间': trader.end_holding_at || 'N/A',
+                    'Pump到买入(秒)': trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
                     '持有时长(分钟)': trader.holding_period !== undefined ? trader.holding_period : 'N/A',
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
@@ -1833,47 +1868,69 @@
                 top: 10px;
                 right: 10px;
                 z-index: 9999;
-                background: white;
+                background: #1a1a1a;
+                color: white;
                 padding: 10px;
-                border: 1px solid #ccc;
+                border: 1px solid #333;
                 border-radius: 5px;
                 display: flex;
                 flex-direction: column;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             `;
 
             const collectButton = document.createElement('button');
             collectButton.textContent = '采集数据';
-            collectButton.style.marginBottom = '5px';
+            collectButton.style.cssText = `
+                margin-bottom: 5px;
+                padding: 8px 12px;
+                background: #2c2c2c;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                &:hover {
+                    background: #3c3c3c;
+                    border-color: #555;
+                }
+            `;
             collectButton.onclick = () => this.parsePageData();
 
-            // 新增批量采集按钮
             const batchCollectButton = document.createElement('button');
             batchCollectButton.textContent = '批量采集';
             batchCollectButton.style.cssText = `
                 margin-bottom: 5px;
-                background-color: #FF4081;
+                padding: 8px 12px;
+                background: #2c2c2c;
                 color: white;
-                border: none;
-                padding: 8px 15px;
-                border-radius: 5px;
+                border: 1px solid #444;
+                border-radius: 4px;
                 cursor: pointer;
                 font-weight: bold;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
                 transition: all 0.3s ease;
+                &:hover {
+                    background: #3c3c3c;
+                    border-color: #555;
+                }
             `;
-            batchCollectButton.onmouseover = () => {
-                batchCollectButton.style.backgroundColor = '#F50057';
-                batchCollectButton.style.transform = 'translateY(-2px)';
-            };
-            batchCollectButton.onmouseout = () => {
-                batchCollectButton.style.backgroundColor = '#FF4081';
-                batchCollectButton.style.transform = 'translateY(0)';
-            };
             batchCollectButton.onclick = () => this.showBatchCollectWindow();
 
             const debugButton = document.createElement('button');
             debugButton.textContent = '显示/隐藏日志';
-            debugButton.style.marginBottom = '5px';
+            debugButton.style.cssText = `
+                margin-bottom: 5px;
+                padding: 8px 12px;
+                background: #2c2c2c;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                &:hover {
+                    background: #3c3c3c;
+                    border-color: #555;
+                }
+            `;
             debugButton.onclick = () => {
                 DebugLogger.logElement.style.display =
                     DebugLogger.logElement.style.display === 'none' ? 'block' : 'none';
@@ -1881,11 +1938,37 @@
 
             const viewDataButton = document.createElement('button');
             viewDataButton.textContent = '查看数据库';
+            viewDataButton.style.cssText = `
+                margin-bottom: 5px;
+                padding: 8px 12px;
+                background: #2c2c2c;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                &:hover {
+                    background: #3c3c3c;
+                    border-color: #555;
+                }
+            `;
             viewDataButton.onclick = () => this.toggleDataViewer();
 
             const testDataSourceButton = document.createElement('button');
             testDataSourceButton.textContent = '数据源测试';
-            testDataSourceButton.style.cssText = 'background-color: #9c27b0; color: white; border: none; padding: 6px 15px; border-radius: 4px; cursor: pointer; margin-top: 5px;';
+            testDataSourceButton.style.cssText = `
+                padding: 8px 12px;
+                background: #2c2c2c;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                &:hover {
+                    background: #3c3c3c;
+                    border-color: #555;
+                }
+            `;
             testDataSourceButton.onclick = () => {
                 document.body.appendChild(this.createTestWindow());
             };
@@ -2159,7 +2242,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 const daySeconds = 24 * 60 * 60;
                 const lastActiveDays = Math.floor((now - lastActiveTimestamp) / daySeconds);
 
-                return ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT 
+                return ((item.realized_profit || 0) + (item.unrealized_profit || 0)) >= CONFIG.MIN_REALIZED_PROFIT
                     && lastActiveDays <= CONFIG.LAST_ACTIVE_DAYS;
             }).sort((a, b) =>
                 ((b.realized_profit || 0) + (b.unrealized_profit || 0)) -
