@@ -2257,6 +2257,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 transform: translate(-50%, -50%);
                 width: 90%;
                 max-width: 1800px;
+                max-height: 800px;
                 background: white;
                 padding: 20px;
                 border-radius: 10px;
