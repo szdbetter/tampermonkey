@@ -4,7 +4,7 @@
 // @version      1.1
 // @description  Collect smart money addresses with enhanced debugging and interaction
 // @author       szdbetter
-// @match        https://gmgn.ai/defi/quotation/v1/tokens/top_traders/*
+// @match        https://gmgn.ai/*
 // @grant        GM_xmlhttpRequest
 // @connect      frontend-api-v3.pump.fun
 // @connect      api.memego.ai
@@ -55,54 +55,111 @@
         logElement: null,
 
         init() {
-            this.logElement = document.createElement('div');
-            this.logElement.style.cssText = `
-                position: fixed;
-                bottom: 10px;
-                right: 10px;
-                width: 95%;
-                max-height: 300px;
-                overflow-y: auto;
-                background: rgba(0,0,0,0.8);
-                color: #0f0;
-                padding: 15px;
-                font-size: 14px;
-                z-index: 10000;
-                border-radius: 10px;
-                line-height: 1.5;
-            `;
-            document.body.appendChild(this.logElement);
+            console.log('开始初始化DebugLogger...');
+            try {
+                // 检查是否已经存在日志元素
+                const existingLog = document.querySelector('#smart-money-debug-log');
+                if (existingLog) {
+                    console.log('找到已存在的日志元素，移除它');
+                    existingLog.remove();
+                }
+
+                // 创建新的日志元素
+                this.logElement = document.createElement('div');
+                this.logElement.id = 'smart-money-debug-log';
+                this.logElement.style.cssText = `
+                    position: fixed;
+                    bottom: 10px;
+                    right: 10px;
+                    width: 95%;
+                    max-height: 300px;
+                    overflow-y: auto;
+                    background: rgba(0,0,0,0.8);
+                    color: #0f0;
+                    padding: 15px;
+                    font-size: 14px;
+                    z-index: 10000;
+                    border-radius: 10px;
+                    line-height: 1.5;
+                    display: block !important;
+                `;
+
+                // 确保body存在
+                if (!document.body) {
+                    console.log('document.body不存在，等待DOM加载完成');
+                    document.addEventListener('DOMContentLoaded', () => {
+                        console.log('DOM加载完成，添加日志元素');
+                        document.body.appendChild(this.logElement);
+                    });
+                } else {
+                    console.log('document.body存在，直接添加日志元素');
+                    document.body.appendChild(this.logElement);
+                }
+
+                console.log('DebugLogger初始化完成');
+            } catch (error) {
+                console.error('DebugLogger初始化失败:', error);
+            }
         },
 
         log(message, type = 'info') {
-            const timestamp = new Date().toLocaleTimeString();
-            const logMessage = `[${timestamp}] ${message}`;
+            // 首先输出到控制台
+            console.log(`[${type.toUpperCase()}] ${message}`);
+            
+            try {
+                // 检查logElement是否存在
+                if (!this.logElement) {
+                    console.warn('日志元素不存在，重新初始化');
+                    this.init();
+                }
 
-            const messageElement = document.createElement('div');
-            messageElement.textContent = logMessage;
+                if (!this.logElement) {
+                    console.error('无法创建日志元素，仅输出到控制台');
+                    return;
+                }
 
-            switch(type) {
-                case 'error':
-                    messageElement.style.color = 'red';
-                    break;
-                case 'warning':
-                    messageElement.style.color = 'yellow';
-                    break;
-                default:
-                    messageElement.style.color = '#0f0';
+                const timestamp = new Date().toLocaleTimeString();
+                const logMessage = `[${timestamp}] ${message}`;
+
+                const messageElement = document.createElement('div');
+                messageElement.textContent = logMessage;
+
+                switch(type) {
+                    case 'error':
+                        messageElement.style.color = 'red';
+                        break;
+                    case 'warning':
+                        messageElement.style.color = 'yellow';
+                        break;
+                    default:
+                        messageElement.style.color = '#0f0';
+                }
+
+                this.logElement.insertBefore(messageElement, this.logElement.firstChild);
+            } catch (error) {
+                console.error('添加日志消息失败:', error);
             }
-
-            this.logElement.prepend(messageElement);
-            console.log(logMessage);
         },
 
         // 新增表格输出方法
         logTable(data, title = '数据详情') {
             console.table(data);
-            const tableElement = document.createElement('div');
-            tableElement.style.color = '#0ff';
-            tableElement.innerHTML = `<strong>${title}:</strong>`;
-            this.logElement.prepend(tableElement);
+            try {
+                if (!this.logElement) {
+                    console.warn('日志元素不存在，重新初始化');
+                    this.init();
+                }
+
+                const tableElement = document.createElement('div');
+                tableElement.style.color = '#0ff';
+                tableElement.innerHTML = `<strong>${title}:</strong>`;
+                
+                if (this.logElement) {
+                    this.logElement.insertBefore(tableElement, this.logElement.firstChild);
+                }
+            } catch (error) {
+                console.error('添加表格日志失败:', error);
+            }
         }
     };
 
@@ -111,11 +168,14 @@
             this.dbName = 'SmartMoneyDB';
             this.storeName = 'traders';
             this.db = null;
+            DebugLogger.log('SmartMoneyDatabase实例创建完成', CONFIG.DEBUG_LEVEL.INFO);
         }
 
         async init() {
-            return new Promise((resolve, reject) => {
+            return new Promise(async (resolve, reject) => {
                 try {
+                    DebugLogger.log('开始初始化SmartMoneyDatabase...', CONFIG.DEBUG_LEVEL.INFO);
+                    
                     // 检查浏览器支持
                     if (!window.indexedDB) {
                         const error = new Error('您的浏览器不支持 IndexedDB');
@@ -123,68 +183,47 @@
                         reject(error);
                         return;
                     }
+                    DebugLogger.log('IndexedDB支持检查通过', CONFIG.DEBUG_LEVEL.INFO);
 
                     // 列出所有数据库
-                    indexedDB.databases().then(databases => {
+                    try {
+                        const databases = await indexedDB.databases();
+                        DebugLogger.log(`开始检查现有数据库列表...`, CONFIG.DEBUG_LEVEL.INFO);
                         const existingDB = databases.find(db => db.name === this.dbName);
-                        DebugLogger.log(`当前存在的数据库: ${JSON.stringify(databases)}`, CONFIG.DEBUG_LEVEL.INFO);
+                        DebugLogger.log(`当前存在的数据库列表: ${JSON.stringify(databases)}`, CONFIG.DEBUG_LEVEL.INFO);
                         if (existingDB) {
-                            DebugLogger.log(`发现已存在的数据库: ${this.dbName}, 版本: ${existingDB.version}`, CONFIG.DEBUG_LEVEL.INFO);
+                            DebugLogger.log(`找到现有数据库: ${this.dbName}, 版本: ${existingDB.version}`, CONFIG.DEBUG_LEVEL.INFO);
                         }
-                    }).catch(error => {
-                        DebugLogger.log(`无法列出数据库: ${error}`, CONFIG.DEBUG_LEVEL.WARNING);
-                    });
+                    } catch (error) {
+                        DebugLogger.log(`列出数据库失败: ${error}`, CONFIG.DEBUG_LEVEL.WARNING);
+                    }
 
+                    DebugLogger.log('开始打开数据库连接...', CONFIG.DEBUG_LEVEL.INFO);
                     // 直接打开或创建数据库
                     const request = indexedDB.open(this.dbName, 3);
 
                     request.onerror = (event) => {
-                        const error = new Error(`数据库初始化错误: ${event.target.error}`);
-                        DebugLogger.log(error.message, CONFIG.DEBUG_LEVEL.ERROR);
-                        reject(error);
+                        const errorMsg = `数据库打开错误: ${event.target.error}`;
+                        DebugLogger.log(errorMsg, CONFIG.DEBUG_LEVEL.ERROR);
+                        DebugLogger.log(`错误详情: ${JSON.stringify(event.target.error)}`, CONFIG.DEBUG_LEVEL.ERROR);
+                        reject(new Error(errorMsg));
                     };
 
                     request.onblocked = (event) => {
-                        const error = new Error('数据库被阻塞，请关闭其他标签页后重试');
-                        DebugLogger.log(error.message, CONFIG.DEBUG_LEVEL.ERROR);
-                        reject(error);
-                    };
-
-                    request.onsuccess = (event) => {
-                        this.db = event.target.result;
-
-                        // 添加错误处理
-                        this.db.onerror = (event) => {
-                            DebugLogger.log(`数据库错误: ${event.target.error}`, CONFIG.DEBUG_LEVEL.ERROR);
-                        };
-
-                        // 检查数据库是否正确创建
-                        if (this.db.objectStoreNames.contains(this.storeName)) {
-                            DebugLogger.log('数据库连接成功', CONFIG.DEBUG_LEVEL.INFO);
-
-                            // 检查数据库中的记录数
-                            const transaction = this.db.transaction([this.storeName], 'readonly');
-                            const store = transaction.objectStore(this.storeName);
-                            const countRequest = store.count();
-
-                            countRequest.onsuccess = () => {
-                                DebugLogger.log(`数据库中现有记录数: ${countRequest.result}`, CONFIG.DEBUG_LEVEL.INFO);
-                            };
-                        } else {
-                            DebugLogger.log('数据表未正确创建', CONFIG.DEBUG_LEVEL.ERROR);
-                        }
-
-                        resolve();
+                        const errorMsg = '数据库被阻塞，请关闭其他标签页后重试';
+                        DebugLogger.log(errorMsg, CONFIG.DEBUG_LEVEL.ERROR);
+                        reject(new Error(errorMsg));
                     };
 
                     request.onupgradeneeded = (event) => {
                         try {
+                            DebugLogger.log(`开始数据库升级流程...`, CONFIG.DEBUG_LEVEL.INFO);
                             const db = event.target.result;
-                            DebugLogger.log(`数据库需要升级，当前版本: ${event.oldVersion}, 新版本: ${event.newVersion}`, CONFIG.DEBUG_LEVEL.INFO);
+                            DebugLogger.log(`数据库升级: 当前版本 ${event.oldVersion} -> 新版本 ${event.newVersion}`, CONFIG.DEBUG_LEVEL.INFO);
 
                             // 只在数据表不存在时创建
                             if (!db.objectStoreNames.contains(this.storeName)) {
-                                DebugLogger.log('创建新的数据表', CONFIG.DEBUG_LEVEL.INFO);
+                                DebugLogger.log('创建新的数据表...', CONFIG.DEBUG_LEVEL.INFO);
                                 const store = db.createObjectStore(this.storeName, {
                                     keyPath: ['ca', 'address']
                                 });
@@ -194,23 +233,7 @@
                                     { name: 'ca', keyPath: 'ca', options: { unique: false } },
                                     { name: 'address', keyPath: 'address', options: { unique: false } },
                                     { name: 'update_time', keyPath: 'update_time', options: { unique: false } },
-                                    { name: 'ca_address', keyPath: ['ca', 'address'], options: { unique: true } },
-                                    { name: 'twitter_username', keyPath: 'twitter_username', options: { unique: false } },
-                                    { name: 'user_name', keyPath: 'user_name', options: { unique: false } },
-                                    { name: 'realized_profit', keyPath: 'realized_profit', options: { unique: false } },
-                                    { name: 'unrealized_profit', keyPath: 'unrealized_profit', options: { unique: false } },
-                                    { name: 'profit_tag', keyPath: 'profit_tag', options: { unique: false } },
-                                    { name: 'dev', keyPath: 'dev', options: { unique: false } },
-                                    { name: 'create_time', keyPath: 'create_time', options: { unique: false } },
-                                    { name: 'launch_time', keyPath: 'launch_time', options: { unique: false } },
-                                    { name: 'sol_balance', keyPath: 'sol_balance', options: { unique: false } },
-                                    { name: 'start_holding_at', keyPath: 'start_holding_at', options: { unique: false } },
-                                    { name: 'end_holding_at', keyPath: 'end_holding_at', options: { unique: false } },
-                                    { name: 'holding_period', keyPath: 'holding_period', options: { unique: false } },
-                                    { name: 'tag_1', keyPath: 'tag_1', options: { unique: false } },
-                                    { name: 'tag_2', keyPath: 'tag_2', options: { unique: false } },
-                                    { name: 'tag_3', keyPath: 'tag_3', options: { unique: false } },
-                                    { name: 'buy_after_launch_interval', keyPath: 'buy_after_launch_interval', options: { unique: false } }
+                                    { name: 'ca_address', keyPath: ['ca', 'address'], options: { unique: true } }
                                 ];
 
                                 indexes.forEach(({ name, keyPath, options }) => {
@@ -222,15 +245,76 @@
 
                                 DebugLogger.log('数据库结构创建完成', CONFIG.DEBUG_LEVEL.INFO);
                             } else {
-                                DebugLogger.log('数据表已存在，无需重新创建', CONFIG.DEBUG_LEVEL.INFO);
+                                DebugLogger.log('数据表已存在，跳过创建', CONFIG.DEBUG_LEVEL.INFO);
                             }
                         } catch (error) {
                             DebugLogger.log(`数据库升级失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                             reject(error);
                         }
                     };
+
+                    request.onsuccess = (event) => {
+                        try {
+                            DebugLogger.log('数据库连接成功', CONFIG.DEBUG_LEVEL.INFO);
+                            this.db = event.target.result;
+
+                            // 添加错误处理
+                            this.db.onerror = (event) => {
+                                DebugLogger.log(`数据库操作错误: ${event.target.error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                            };
+
+                            // 检查数据库是否正确创建
+                            if (this.db.objectStoreNames.contains(this.storeName)) {
+                                DebugLogger.log('数据表存在性检查通过', CONFIG.DEBUG_LEVEL.INFO);
+
+                                // 检查数据库中的记录数
+                                try {
+                                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                                    DebugLogger.log('创建只读事务成功', CONFIG.DEBUG_LEVEL.INFO);
+                                    
+                                    const store = transaction.objectStore(this.storeName);
+                                    DebugLogger.log('获取数据表成功', CONFIG.DEBUG_LEVEL.INFO);
+                                    
+                                    const countRequest = store.count();
+                                    DebugLogger.log('开始获取记录数...', CONFIG.DEBUG_LEVEL.INFO);
+
+                                    countRequest.onsuccess = () => {
+                                        DebugLogger.log(`数据库当前记录数: ${countRequest.result}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        DebugLogger.log('数据库初始化完成', CONFIG.DEBUG_LEVEL.INFO);
+                                        resolve();
+                                    };
+
+                                    countRequest.onerror = (error) => {
+                                        DebugLogger.log(`获取记录数失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                        resolve(); // 即使获取记录数失败，仍然继续
+                                    };
+
+                                    transaction.oncomplete = () => {
+                                        DebugLogger.log('事务完成', CONFIG.DEBUG_LEVEL.INFO);
+                                    };
+
+                                    transaction.onerror = (error) => {
+                                        DebugLogger.log(`事务错误: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                    };
+                                } catch (error) {
+                                    DebugLogger.log(`检查记录数时发生错误: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                    DebugLogger.log(`错误堆栈: ${error.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                    resolve(); // 即使发生错误，仍然继续
+                                }
+                            } else {
+                                const error = new Error('数据表未正确创建');
+                                DebugLogger.log(error.message, CONFIG.DEBUG_LEVEL.ERROR);
+                                reject(error);
+                            }
+                        } catch (error) {
+                            DebugLogger.log(`数据库连接成功后处理失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                            DebugLogger.log(`错误堆栈: ${error.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+                            reject(error);
+                        }
+                    };
                 } catch (error) {
                     DebugLogger.log(`数据库初始化过程出错: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                    DebugLogger.log(`错误堆栈: ${error.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
                     reject(error);
                 }
             });
@@ -254,6 +338,8 @@
                             ...existingTrader,
                             buy_volume: trader.buy_volume,
                             sell_volume: trader.sell_volume,
+                            buy_tx_count: trader.buy_tx_count,
+                            sell_tx_count: trader.sell_tx_count,
                             realized_profit: trader.realized_profit,
                             unrealized_profit: trader.unrealized_profit,
                             twitter_username: trader.twitter_username,
@@ -309,7 +395,7 @@
             this.selectedFields = new Set([
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
-                '持有时长(分钟)', '买入金额', '卖出金额', '实现利润', '未实现利润',
+                '持有时长(分钟)', '买入金额', '卖出金额', '买入次数', '卖出次数', '实现利润', '未实现利润',
                 'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
             ]); // 默认全选
         }
@@ -573,11 +659,13 @@
                         address: item.address,
                         buy_volume: Math.round(item.buy_volume_cur) || 0,
                         sell_volume: Math.round(item.sell_volume_cur) || 0,
+                        buy_tx_count: Math.round(item.buy_tx_count_cur) || 0,
+                        sell_tx_count: Math.round(item.sell_tx_count_cur) || 0,
                         realized_profit: Math.round(item.realized_profit) || 0,
                         unrealized_profit: Math.round(item.unrealized_profit) || 0,
                         twitter_username: item.twitter_username || '',
                         user_name: item.name || '',
-                        profit_tag: index + 1, // 使用循环的索引i代替之前未定义的index
+                        profit_tag: index + 1,
                         tag_1: '',
                         tag_2: '',
                         tag_3: '',
@@ -591,7 +679,8 @@
                             ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
                             : null,
                         holding_period: holdingPeriod,
-                        buy_after_launch_interval: buyAfterLaunchInterval
+                        buy_after_launch_interval: buyAfterLaunchInterval,
+                        update_time: this.getBeijingTime()
                     };
 
                     // 在实际写入数据库时设置update_time
@@ -651,9 +740,12 @@
                     document.body.appendChild(progressBar);
 
                     let importedCount = 0;
+                    let insertedCount = 0;
+                    let updatedCount = 0;
+
                     for (const row of jsonData) {
                         const trader = {
-                            name: row['名称'],
+                            token: row['名称'],
                             ca: row['合约'],
                             address: row['聪明钱'],
                             dev: row['Dev'],
@@ -665,25 +757,50 @@
                             holding_period: row['持有时长(分钟)'] !== 'N/A' ? parseInt(row['持有时长(分钟)']) : null,
                             buy_volume: parseInt(row['买入金额'].replace(/,/g, '')),
                             sell_volume: parseInt(row['卖出金额'].replace(/,/g, '')),
+                            buy_tx_count: parseInt(row['买入次数'].replace(/,/g, '')),
+                            sell_tx_count: parseInt(row['卖出次数'].replace(/,/g, '')),
                             realized_profit: parseInt(row['实现利润'].replace(/,/g, '')),
                             unrealized_profit: row['未实现利润'] !== 'N/A' ? parseInt(row['未实现利润'].replace(/,/g, '')) : null,
                             twitter_username: row['Twitter'],
                             user_name: row['用户名'],
                             profit_tag: parseInt(row['利润排名']),
-                            update_time: this.getBeijingTime(), // 使用当前时间而不是Excel中的时间
-
-                            // 新增 buy_after_launch_interval 字段
+                            update_time: this.getBeijingTime(),
                             buy_after_launch_interval: row['Pump到买入(秒)'] !== 'N/A' ? parseInt(row['Pump到买入(秒)']) : null
                         };
 
-                        await this.db.upsertTrader(trader);
-                        importedCount++;
-                        progressBar.textContent = `正在导入数据... (${importedCount}/${jsonData.length})`;
+                        // 检查记录是否存在
+                        const transaction = this.db.db.transaction([this.db.storeName], 'readwrite');
+                        const store = transaction.objectStore(this.db.storeName);
+                        const index = store.index('ca_address');
+                        const request = index.get(IDBKeyRange.only([trader.ca, trader.address]));
+
+                        await new Promise((resolve, reject) => {
+                            request.onsuccess = async () => {
+                                try {
+                                    const existingTrader = request.result;
+                                    if (existingTrader) {
+                                        // 更新现有记录
+                                        await this.db.upsertTrader(trader);
+                                        updatedCount++;
+                                    } else {
+                                        // 插入新记录
+                                        await this.db.upsertTrader(trader);
+                                        insertedCount++;
+                                    }
+                                    importedCount++;
+                                    progressBar.textContent = `正在导入数据... (${importedCount}/${jsonData.length})`;
+                                    resolve();
+                                } catch (error) {
+                                    reject(error);
+                                }
+                            };
+                            request.onerror = () => reject(request.error);
+                        });
                     }
 
                     document.body.removeChild(progressBar);
                     this.loadAndDisplayData(); // 刷新显示
-                    alert(`成功导入 ${importedCount} 条数据`);
+                    alert(`导入完成：\n新增 ${insertedCount} 条记录\n更新 ${updatedCount} 条记录`);
 
                 } catch (error) {
                     console.error('导入失败:', error);
@@ -1129,6 +1246,8 @@
                 '持有时长(分钟)': '100px',
                 '买入金额': '60px',
                 '卖出金额': '60px',
+                '买入次数': '60px',
+                '卖出次数': '60px',
                 '实现利润': '70px',
                 '未实现利润': '70px',
                 'Twitter': '50px',
@@ -1137,7 +1256,6 @@
                 '标签1': '50px',
                 '标签2': '50px',
                 '标签3': '50px',
-
                 '更新时间': '120px'
             };
 
@@ -1163,10 +1281,9 @@
 
             const headerRow = document.createElement('tr');
             const headers = [
-                'NO.',  // 添加序号列
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
-                '买入金额', '卖出金额', '实现利润', '未实现利润',
+                '买入金额', '卖出金额', '买入次数', '卖出次数', '实现利润', '未实现利润',
                 'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
@@ -1299,24 +1416,21 @@
                 };
 
                 const rowData = [
-                    (this.currentPage - 1) * this.pageSize + index + 1,  // 添加序号
                     trader.token,
                     trader.ca,
                     trader.address,
                     trader.dev || 'N/A',
                     trader.launch_time ? new Date(trader.launch_time).toLocaleString() : 'N/A',
-
-                    // 新增字段
                     this.formatNumberWithCommas(trader.sol_balance, 1) || 'N/A',
                     trader.last_active_time || 'N/A',
                     trader.start_holding_at || 'N/A',
                     trader.end_holding_at || 'N/A',
                     trader.buy_after_launch_interval !== undefined ? this.formatNumberWithCommas(trader.buy_after_launch_interval) : 'N/A',
-
                     trader.holding_period !== undefined ? this.formatNumberWithCommas(trader.holding_period) : 'N/A',
-
                     this.formatNumberWithCommas(trader.buy_volume),
                     this.formatNumberWithCommas(trader.sell_volume),
+                    this.formatNumberWithCommas(trader.buy_tx_count),
+                    this.formatNumberWithCommas(trader.sell_tx_count),
                     this.formatNumberWithCommas(trader.realized_profit),
                     trader.unrealized_profit !== undefined ? this.formatNumberWithCommas(trader.unrealized_profit) : 'N/A',
                     trader.twitter_username || 'N/A',
@@ -1632,16 +1746,15 @@
                     'Dev': trader.dev || 'N/A',
                     'Pump内盘发射': trader.launch_time ? new Date(trader.launch_time).toLocaleString() : 'N/A',
                     '聪明钱': trader.address,
-
-                    // 新增字段
                     'SOL余额': trader.sol_balance || 'N/A',
                     '最后活跃时间': trader.last_active_time || 'N/A',
                     '买入时间': trader.start_holding_at || 'N/A',
                     '卖出时间': trader.end_holding_at || 'N/A',
                     '持有时长(分钟)': trader.holding_period !== undefined ? trader.holding_period : 'N/A',
-
                     '买入金额': this.formatNumberWithCommas(trader.buy_volume),
                     '卖出金额': this.formatNumberWithCommas(trader.sell_volume),
+                    '买入次数': this.formatNumberWithCommas(trader.buy_tx_count),
+                    '卖出次数': this.formatNumberWithCommas(trader.sell_tx_count),
                     '实现利润': this.formatNumberWithCommas(trader.realized_profit),
                     '未实现利润': trader.unrealized_profit !== null ? this.formatNumberWithCommas(trader.unrealized_profit) : 'N/A',
                     'Twitter': trader.twitter_username || 'N/A',
@@ -1650,13 +1763,16 @@
                     '标签1': trader.tag_1 || '',
                     '标签2': trader.tag_2 || '',
                     '标签3': trader.tag_3 || '',
-                    'Pump到买入(秒)': trader.buy_after_launch_interval !== undefined ? trader.buy_after_launch_interval : 'N/A',
-                    '更新时间': trader.update_time,
+                    '更新时间': trader.update_time || 'N/A'
                 })));
 
                 const workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, '聪明钱数据库');
-                XLSX.writeFile(workbook, `traders_data_${new Date().toISOString().split('T')[0]}.xlsx`);
+                XLSX.utils.book_append_sheet(workbook, worksheet, '聪明钱数据');
+                XLSX.writeFile(workbook, `聪明钱数据_${new Date().toLocaleString().replace(/[\/\s:]/g, '_')}.xlsx`);
+            };
+
+            request.onerror = (event) => {
+                DebugLogger.log(`导出数据失败: ${event.target.error}`, CONFIG.DEBUG_LEVEL.ERROR);
             };
         }
 
@@ -2031,6 +2147,8 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     address: item.address,
                     buy_volume: Math.round(item.buy_volume_cur) || 0,
                     sell_volume: Math.round(item.sell_volume_cur) || 0,
+                    buy_tx_count: Math.round(item.buy_tx_count_cur) || 0,
+                    sell_tx_count: Math.round(item.sell_tx_count_cur) || 0,
                     realized_profit: Math.round(item.realized_profit) || 0,
                     unrealized_profit: Math.round(item.unrealized_profit) || 0,
                     twitter_username: item.twitter_username || '',
@@ -2049,7 +2167,8 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                         ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
                         : null,
                     holding_period: holdingPeriod,
-                    buy_after_launch_interval: buyAfterLaunchInterval
+                    buy_after_launch_interval: buyAfterLaunchInterval,
+                    update_time: this.getBeijingTime()
                 };
 
                 // 在实际写入数据库时设置update_time
@@ -2804,7 +2923,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
 
             // 所有可用字段
             const allFields = [
-                'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
+                '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
                 '持有时长(分钟)', '买入金额', '卖出金额', '实现利润', '未实现利润',
                 'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
@@ -2946,39 +3065,142 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
         }
     }
 
-    async function main() {
+    // 初始化检查函数
+    async function initializeApp() {
         try {
+            // 初始化调试日志
             DebugLogger.init();
+            DebugLogger.log('开始初始化应用...', CONFIG.DEBUG_LEVEL.INFO);
+            
+            // 检查页面加载状态
+            DebugLogger.log(`当前页面状态: ${document.readyState}`, CONFIG.DEBUG_LEVEL.INFO);
+            
+            // 如果页面已经加载完成，直接继续
+            if (document.readyState === 'complete') {
+                DebugLogger.log('页面已完全加载，继续执行', CONFIG.DEBUG_LEVEL.INFO);
+            } 
+            // 如果页面至少已经可交互，也继续执行
+            else if (document.readyState === 'interactive') {
+                DebugLogger.log('页面已可交互，继续执行', CONFIG.DEBUG_LEVEL.INFO);
+            }
+            // 只有在页面完全未加载时才等待
+            else {
+                DebugLogger.log('等待页面基本加载...', CONFIG.DEBUG_LEVEL.INFO);
+                await new Promise(resolve => {
+                    // 优先使用 DOMContentLoaded 事件
+                    document.addEventListener('DOMContentLoaded', () => {
+                        DebugLogger.log('DOMContentLoaded事件触发，继续执行', CONFIG.DEBUG_LEVEL.INFO);
+                        resolve();
+                    }, { once: true });
 
-            const db = new SmartMoneyDatabase();
-            await db.init();
+                    // 同时也监听 load 事件
+                    window.addEventListener('load', () => {
+                        DebugLogger.log('load事件触发，继续执行', CONFIG.DEBUG_LEVEL.INFO);
+                        resolve();
+                    }, { once: true });
 
-            const collector = new DataCollector(db);
-            collector.createUI();
-
-            let lastUrl = location.href;
-            const observer = new MutationObserver(() => {
-                if (location.href !== lastUrl) {
-                    lastUrl = location.href;
-                    collector.parsePageData();
+                    // 设置更短的超时时间，因为我们只需要基本的DOM结构
+                    setTimeout(() => {
+                        DebugLogger.log('等待页面加载超时（2秒），继续执行', CONFIG.DEBUG_LEVEL.WARNING);
+                        resolve();
+                    }, 2000);
+                });
+            }
+            
+            DebugLogger.log('开始数据库初始化流程...', CONFIG.DEBUG_LEVEL.INFO);
+            
+            // 检查数据库是否已存在
+            try {
+                const databases = await indexedDB.databases();
+                DebugLogger.log(`获取到数据库列表: ${JSON.stringify(databases)}`, CONFIG.DEBUG_LEVEL.INFO);
+                const existingDB = databases.find(db => db.name === 'SmartMoneyDB');
+                if (existingDB) {
+                    DebugLogger.log(`发现已存在的数据库: SmartMoneyDB, 版本: ${existingDB.version}`, CONFIG.DEBUG_LEVEL.INFO);
                 }
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-
-            collector.parsePageData();
-
+            } catch (dbListError) {
+                DebugLogger.log(`获取数据库列表失败: ${dbListError}`, CONFIG.DEBUG_LEVEL.ERROR);
+                DebugLogger.log(`错误堆栈: ${dbListError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+            }
+            
+            DebugLogger.log('开始初始化数据库实例...', CONFIG.DEBUG_LEVEL.INFO);
+            
+            // 初始化数据库
+            const database = new SmartMoneyDatabase();
+            DebugLogger.log('数据库实例创建完成，开始调用init方法...', CONFIG.DEBUG_LEVEL.INFO);
+            
+            try {
+                await database.init();
+                DebugLogger.log('数据库初始化成功，开始创建收集器...', CONFIG.DEBUG_LEVEL.INFO);
+            } catch (dbError) {
+                DebugLogger.log(`数据库初始化失败: ${dbError.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                DebugLogger.log(`数据库错误堆栈: ${dbError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+                throw dbError;
+            }
+            
+            // 创建收集器
+            let collector;
+            try {
+                collector = new DataCollector(database);
+                DebugLogger.log('收集器创建完成，开始创建UI...', CONFIG.DEBUG_LEVEL.INFO);
+            } catch (collectorError) {
+                DebugLogger.log(`收集器创建失败: ${collectorError.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                DebugLogger.log(`收集器错误堆栈: ${collectorError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+                throw collectorError;
+            }
+            
+            // 创建UI
+            try {
+                collector.createUI();
+                DebugLogger.log('基础UI创建完成', CONFIG.DEBUG_LEVEL.INFO);
+                
+                collector.createDataViewerUI();
+                DebugLogger.log('数据查看器UI创建完成', CONFIG.DEBUG_LEVEL.INFO);
+            } catch (uiError) {
+                DebugLogger.log(`UI创建失败: ${uiError.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                DebugLogger.log(`UI错误堆栈: ${uiError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+                throw uiError;
+            }
+            
+            // 保存实例
+            window.currentCollector = collector;
+            window.currentDB = database;
+            
+            DebugLogger.log('初始化完成，所有组件已就绪', CONFIG.DEBUG_LEVEL.INFO);
+            return true;
         } catch (error) {
-            DebugLogger.log(`初始化失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+            DebugLogger.log(`初始化失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+            DebugLogger.log(`错误堆栈: ${error.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+            console.error('初始化失败:', error);
+            
+            // 尝试恢复
+            try {
+                if (window.currentCollector) {
+                    delete window.currentCollector;
+                    DebugLogger.log('已清理收集器实例', CONFIG.DEBUG_LEVEL.INFO);
+                }
+                if (window.currentDB) {
+                    delete window.currentDB;
+                    DebugLogger.log('已清理数据库实例', CONFIG.DEBUG_LEVEL.INFO);
+                }
+                DebugLogger.log('清理全局实例完成', CONFIG.DEBUG_LEVEL.INFO);
+            } catch (cleanupError) {
+                DebugLogger.log(`清理失败: ${cleanupError.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                DebugLogger.log(`清理错误堆栈: ${cleanupError.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+            }
+            
+            return false;
         }
     }
-
+    
+    // 确保在页面准备好后再初始化
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', main);
+        DebugLogger.log('页面正在加载，等待DOMContentLoaded事件...', CONFIG.DEBUG_LEVEL.INFO);
+        document.addEventListener('DOMContentLoaded', () => {
+            DebugLogger.log('DOMContentLoaded事件触发，开始初始化', CONFIG.DEBUG_LEVEL.INFO);
+            initializeApp();
+        });
     } else {
-        main();
+        DebugLogger.log('页面已经加载，直接开始初始化', CONFIG.DEBUG_LEVEL.INFO);
+        initializeApp();
     }
 })();
