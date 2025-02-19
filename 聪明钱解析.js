@@ -881,14 +881,16 @@
                 width: 95%;
                 max-width: 1800px;
                 max-height: 90%;
-                background: white;
-                border: 2px solid #4CAF50;
+                background: #1a1a1a;
+                border: 1px solid #333;
                 border-radius: 10px;
                 padding: 20px;
                 z-index: 10001;
                 overflow: hidden;
                 display: none;
                 flex-direction: column;
+                color: white;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             `;
 
             // 点击遮罩层关闭窗口
@@ -2395,29 +2397,34 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 width: 90%;
                 max-width: 1800px;
                 max-height: 800px;
-                background: white;
+                background: #1a1a1a;
                 padding: 20px;
                 border-radius: 10px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                border: 1px solid #333;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
                 z-index: 10002;
                 display: flex;
                 gap: 20px;
-                font-size:13px;
+                font-size: 13px;
+                color: white;
             `;
 
             // 左侧输入区域
             const leftPanel = document.createElement('div');
             leftPanel.style.cssText = `
-                flex:1 ;
+                flex: 1;
                 min-width: 300px;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
+                background: #1a1a1a;
+                border-radius: 5px;
+                padding: 10px;
             `;
 
             const title = document.createElement('h3');
             title.textContent = '批量采集';
-            title.style.cssText = 'margin: 0; color: #333;';
+            title.style.cssText = 'margin: 0; color: white;';
 
             const textarea = document.createElement('textarea');
             textarea.placeholder = '请输入CA地址，每行一个';
@@ -2425,92 +2432,25 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 width: 100%;
                 height: 300px;
                 padding: 10px;
-                border: 1px solid #ddd;
+                border: 1px solid #333;
                 border-radius: 5px;
                 resize: none;
                 font-family: monospace;
-                font-size:13px;
-            `;
-
-            const buttonContainer = document.createElement('div');
-            buttonContainer.style.cssText = 'display: flex; gap: 10px;';
-
-            // 添加时间选择下拉框
-            const timeSelect = document.createElement('select');
-            timeSelect.style.cssText = `
-                padding: 5px 10px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                margin-right: 10px;
-                height: 30px;
-
-            `;
-            ['1m', '5m', '1h', '6h', '24h'].forEach(time => {
-                const option = document.createElement('option');
-                option.value = time;
-                option.textContent = time;
-                if (time === '24h') option.selected = true;
-                timeSelect.appendChild(option);
-            });
-
-            const startButton = document.createElement('button');
-            startButton.textContent = '开始采集';
-            startButton.style.cssText = `
-                padding: 10px 20px;
-                background: #4CAF50;
+                font-size: 13px;
+                background: #2c2c2c;
                 color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                height: 40px;
-            `;
-
-            const closeButton = document.createElement('button');
-            closeButton.textContent = '关闭';
-            closeButton.style.cssText = `
-                padding: 10px 20px;
-                background: #f44336;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                height: 40px;
-            `;
-
-            // 添加GMGN热门(所有)按钮
-            const gmgnAllButton = document.createElement('button');
-            gmgnAllButton.textContent = 'GMGN热门(所有)';
-            gmgnAllButton.style.cssText = `
-                padding: 10px 20px;
-                background: #2196F3;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                height: 40px;
-            `;
-
-            // 添加GMGN热门(PUMP)按钮
-            const gmgnPumpButton = document.createElement('button');
-            gmgnPumpButton.textContent = 'GMGN热门(PUMP)';
-            gmgnPumpButton.style.cssText = `
-                padding: 10px 20px;
-                background: #9c27b0;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                height: 40px;
             `;
 
             // 右侧状态显示区域
             const rightPanel = document.createElement('div');
             rightPanel.style.cssText = `
                 flex: 3;
-                border-left: 1px solid #eee;
+                border-left: 1px solid #333;
                 padding-left: 20px;
                 display: flex;
                 flex-direction: column;
+                background: #1a1a1a;
+                border-radius: 5px;
             `;
 
             // 添加筛选条件区域
@@ -2518,75 +2458,96 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             filterContainer.style.cssText = `
                 margin-bottom: 20px;
                 padding: 15px;
-                background: #f8f9fa;
+                background: #2c2c2c;
+                border: 1px solid #333;
                 border-radius: 5px;
                 display: flex;
                 gap: 15px;
                 align-items: center;
+                color: white;
             `;
 
-            // 持有人输入框
-            const holderContainer = document.createElement('div');
-            holderContainer.style.cssText = 'display: flex; align-items: center; gap: 5px;';
+            // 修改输入框和标签的样式
             const holderLabel = document.createElement('label');
             holderLabel.textContent = '最少持有人(K):';
+            holderLabel.style.color = 'white';
             const holderInput = document.createElement('input');
             holderInput.type = 'number';
             holderInput.value = '3';
-            holderInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
-            holderContainer.appendChild(holderLabel);
-            holderContainer.appendChild(holderInput);
+            holderInput.style.cssText = `
+                width: 60px;
+                padding: 5px;
+                border: 1px solid #444;
+                border-radius: 4px;
+                background: #2c2c2c;
+                color: white;
+            `;
 
-            // 市值输入框
-            const marketCapContainer = document.createElement('div');
-            marketCapContainer.style.cssText = 'display: flex; align-items: center; gap: 5px;';
             const marketCapLabel = document.createElement('label');
             marketCapLabel.textContent = '最小市值(M):';
+            marketCapLabel.style.color = 'white';
             const marketCapInput = document.createElement('input');
             marketCapInput.type = 'number';
             marketCapInput.value = '1';
-            marketCapInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
-            marketCapContainer.appendChild(marketCapLabel);
-            marketCapContainer.appendChild(marketCapInput);
+            marketCapInput.style.cssText = `
+                width: 60px;
+                padding: 5px;
+                border: 1px solid #444;
+                border-radius: 4px;
+                background: #2c2c2c;
+                color: white;
+            `;
 
-            filterContainer.appendChild(holderContainer);
-            filterContainer.appendChild(marketCapContainer);
+            // 修改时间选择器样式
+            const timeSelect = document.createElement('select');
+            timeSelect.style.cssText = `
+                padding: 5px 10px;
+                border: 1px solid #444;
+                border-radius: 4px;
+                margin-right: 10px;
+                height: 30px;
+                background: #2c2c2c;
+                color: white;
+            `;
 
-            const statusTitle = document.createElement('h3');
-            statusTitle.textContent = '采集状态';
-            statusTitle.style.cssText = 'margin: 0; color: #333;';
-
+            // 修改状态容器样式
             const statusContainer = document.createElement('div');
             statusContainer.style.cssText = `
                 flex: 1;
                 overflow-y: auto;
                 margin-top: 10px;
-                border: 1px solid #eee;
+                border: 1px solid #333;
                 border-radius: 5px;
                 padding: 10px;
+                background: #1a1a1a;
+                color: white;
             `;
 
+            // 修改汇总容器样式
             const summaryContainer = document.createElement('div');
             summaryContainer.style.cssText = `
                 margin-top: 10px;
                 padding: 10px;
-                background: #f5f5f5;
+                background: #2c2c2c;
+                border: 1px solid #333;
                 border-radius: 5px;
+                color: white;
             `;
 
-            // GMGN热点数据表格容器
+            // GMGN热点数据表格容器样式
             const gmgnTableContainer = document.createElement('div');
             gmgnTableContainer.style.cssText = `
                 display: none;
                 margin-top: 10px;
                 max-height: 500px;
                 overflow-y: auto;
-                background: white;
-                border: 1px solid #ddd;
+                background: #1a1a1a;
+                border: 1px solid #333;
                 border-radius: 5px;
                 padding: 10px;
                 position: relative;
                 z-index: 1;
+                color: white;
             `;
 
             // 格式化数字为K/M单位
@@ -2877,11 +2838,16 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
 
             // 开始采集按钮事件
             startButton.onclick = async () => {
-                const cas = textarea.value.trim().split('\n').filter(ca => ca.trim());
-                if (cas.length === 0) {
+                const allCas = textarea.value.trim().split('\n').filter(ca => ca.trim());
+                if (allCas.length === 0) {
                     alert('请输入至少一个CA地址');
                     return;
                 }
+
+                // 检查重复的CA
+                const uniqueCas = [...new Set(allCas)];
+                const duplicateCount = allCas.length - uniqueCas.length;
+                const cas = uniqueCas;
 
                 startButton.disabled = true;
                 startButton.style.opacity = '0.5';
@@ -2903,11 +2869,13 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                         justify-content: space-between;
                         align-items: center;
                         padding: 5px;
-                        border-bottom: 1px solid #eee;
+                        border-bottom: 1px solid #333;
+                        background: #1a1a1a;
+                        color: white;
                     `;
 
                     const caText = document.createElement('div');
-                    caText.textContent = ca;
+                    caText.textContent = `${i + 1}. ${ca}`;
                     caText.style.cssText = 'font-family: monospace; flex: 1;';
 
                     const status = document.createElement('div');
@@ -2917,19 +2885,26 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     retryButton.textContent = '重试';
                     retryButton.style.cssText = `
                         padding: 2px 8px;
-                        background: #2196F3;
+                        background: #2c2c2c;
                         color: white;
-                        border: none;
-                        border-radius: 3px;
+                        border: 1px solid #444;
+                        border-radius: 4px;
                         cursor: pointer;
                         margin-left: 10px;
                         display: none;
+                        &:hover {
+                            background: #3c3c3c;
+                            border-color: #555;
+                        }
                     `;
 
                     status.appendChild(retryButton);
                     statusRow.appendChild(caText);
                     statusRow.appendChild(status);
                     statusContainer.appendChild(statusRow);
+
+                    // 自动滚动到最新记录
+                    statusContainer.scrollTop = statusContainer.scrollHeight;
 
                     try {
                         status.textContent = '正在采集...';
@@ -3016,10 +2991,10 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     const updateSummary = async () => {
                         const dbStats = await this.getDBStats();
                         summaryContainer.innerHTML = `
-                            <div style="font-weight: bold; margin-bottom: 5px;">采集统计</div>
-                            <div>本次采集${cas.length}个CA，成功${totalSuccess}个，失败${totalFailed}个</div>
-                            <div>新插入${totalInserted}条记录，更新${totalUpdated}条记录</div>
-                            <div>数据库现有${dbStats.caCount}个CA，${dbStats.recordCount}条记录</div>
+                            <div style="font-weight: bold; margin-bottom: 5px; color: white;">采集统计</div>
+                            <div style="color: white;">本次采集${allCas.length}个CA（有效${cas.length}个，重复${duplicateCount}个，已去除），成功${totalSuccess}个，失败${totalFailed}个</div>
+                            <div style="color: white;">新插入${totalInserted}条记录，更新${totalUpdated}条记录</div>
+                            <div style="color: white;">数据库现有${dbStats.caCount}个CA，${dbStats.recordCount}条记录</div>
                         `;
                         DebugLogger.log(`更新统计信息: 成功${totalSuccess}个，失败${totalFailed}个`, CONFIG.DEBUG_LEVEL.INFO);
                     };
