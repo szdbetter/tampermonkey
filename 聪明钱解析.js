@@ -90,7 +90,7 @@
     // 调试日志工具
     const DebugLogger = {
         logElement: null,
-        
+
         init() {
             console.log('开始初始化DebugLogger...');
             try {
@@ -157,10 +157,10 @@
 
             const timestamp = new Date().toLocaleTimeString();
             const logMessage = `[${timestamp}] ${message}`;
-            
+
             const messageElement = document.createElement('div');
             messageElement.textContent = logMessage;
-            
+
             switch(type) {
                 case 'error':
                     messageElement.style.color = 'red';
@@ -251,7 +251,7 @@
                         DebugLogger.log(errorMsg, CONFIG.DEBUG_LEVEL.ERROR);
                         reject(new Error(errorMsg));
                 };
-                
+
                 request.onupgradeneeded = (event) => {
                         try {
                             DebugLogger.log(`开始数据库升级流程...`, CONFIG.DEBUG_LEVEL.INFO);
@@ -261,8 +261,8 @@
                             // 只在数据表不存在时创建
                     if (!db.objectStoreNames.contains(this.storeName)) {
                                 DebugLogger.log('创建新的数据表...', CONFIG.DEBUG_LEVEL.INFO);
-                        const store = db.createObjectStore(this.storeName, { 
-                            keyPath: ['ca', 'address'] 
+                        const store = db.createObjectStore(this.storeName, {
+                            keyPath: ['ca', 'address']
                         });
 
                                 // 创建索引
@@ -361,15 +361,15 @@
             return new Promise((resolve, reject) => {
                 const transaction = this.db.transaction([this.storeName], 'readwrite');
                 const store = transaction.objectStore(this.storeName);
-                
+
                 const index = store.index('ca_address');
                 const query = IDBKeyRange.only([trader.ca, trader.address]);
-                
+
                 const request = index.get(query);
-                
+
                 request.onsuccess = (event) => {
                     const existingTrader = event.target.result;
-                    
+
                     if (existingTrader) {
                         const updatedTrader = {
                             ...existingTrader,
@@ -406,7 +406,7 @@
                     }
                     resolve();
                 };
-                
+
                 request.onerror = () => {
                     DebugLogger.log(`存储聪明钱失败: ${trader.address}`, CONFIG.DEBUG_LEVEL.ERROR);
                     reject(request.error);
@@ -970,9 +970,10 @@
             const pageSizeLabel = document.createElement('span');
             pageSizeLabel.textContent = '每页显示：';
             pageSizeLabel.style.marginRight = '5px';
+            resetButton.style.cssText = 'background: #2d2d2d; color: white;';
 
             const pageSizeSelect = document.createElement('select');
-            pageSizeSelect.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd;';
+            pageSizeSelect.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd;background: #2d2d2d;color: #ffffff;';
 
             [200, 500, 1000, 'ALL'].forEach(size => {
                 const option = document.createElement('option');
@@ -1344,22 +1345,7 @@
 
             // 创建表头
             const thead = document.createElement('thead');
-            thead.innerHTML = `
-                <tr>
-                    <th style="padding: 8px; text-align: center; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">序号</th>
-                    <th style="padding: 8px; text-align: left; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">聪明钱地址</th>
-                    <th style="padding: 8px; text-align: left; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">名称</th>
-                    <th style="padding: 8px; text-align: left; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">合约</th>
-                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">买入金额</th>
-                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">卖出金额</th>
-                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">净买入</th>
-                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">已实现盈亏</th>
-                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">买入次数</th>
-                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">卖出次数</th>
-                    <th style="padding: 8px; text-align: center; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">最后更新</th>
-                    <th style="padding: 8px; text-align: center; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">操作</th>
-                </tr>
-            `;
+
 
             // 添加必要的样式
             const styleSheet = document.createElement('style');
@@ -1394,7 +1380,7 @@
                         padding: 8px;
                         text-align: left;
                         font-size: 14px;
-                        background-color: #f2f2f2;
+                        background-color: #2d2d2d;
                         cursor: pointer;
                         width: ${columnWidths[headerText]};
                         position: relative;
@@ -1967,7 +1953,7 @@
                 }
             `;
             debugButton.onclick = () => {
-                DebugLogger.logElement.style.display = 
+                DebugLogger.logElement.style.display =
                     DebugLogger.logElement.style.display === 'none' ? 'block' : 'none';
             };
 
@@ -2576,7 +2562,8 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             filterContainer.style.cssText = `
                 margin-bottom: 20px;
                 padding: 15px;
-                background: #f8f9fa;
+                background: #2d2d2d;
+                color: #ffffff;
                 border-radius: 5px;
                 display: flex;
                 gap: 15px;
@@ -2612,7 +2599,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
 
             const statusTitle = document.createElement('h3');
             statusTitle.textContent = '采集状态';
-            statusTitle.style.cssText = 'margin: 0; color: #333;';
+            statusTitle.style.cssText = 'margin: 0; color: #ffffff;';
 
             // 状态显示区域
             const statusContainer = document.createElement('div');
@@ -2690,6 +2677,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 table.style.cssText = `
                     width: 100%;
                     border-collapse: collapse;
+                    background: #2d2d2d;
                     margin-top: 10px;
                     font-size: 12px;
                 `;
@@ -2698,15 +2686,15 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 const thead = document.createElement('thead');
                 thead.innerHTML = `
                     <tr>
-                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 30px;"><input type="checkbox" id="selectAll"></th>
-                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 50px;">NO.</th>
-                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 50px;">Logo</th>
-                        <th style="padding: 8px; text-align: left; background: #f5f5f5; position: sticky; top: 0; width: 100px;">名称</th>
-                        <th style="padding: 8px; text-align: left; background: #f5f5f5; position: sticky; top: 0; width: 200px;">CA</th>
-                        <th style="padding: 8px; text-align: right; background: #f5f5f5; position: sticky; top: 0; width: 100px;">持有人</th>
-                        <th style="padding: 8px; text-align: right; background: #f5f5f5; position: sticky; top: 0; width: 100px;">市值</th>
-                        <th style="padding: 8px; text-align: right; background: #f5f5f5; position: sticky; top: 0; width: 100px;">VOL</th>
-                        <th style="padding: 8px; text-align: center; background: #f5f5f5; position: sticky; top: 0; width: 100px;">创建时间</th>
+                        <th style="padding: 8px; text-align: center; background: #2d2d2d; position: sticky; top: 0; width: 30px;"><input type="checkbox" id="selectAll"></th>
+                        <th style="padding: 8px; text-align: center; background: #2d2d2d; position: sticky; top: 0; width: 50px;">NO.</th>
+                        <th style="padding: 8px; text-align: center; background: #2d2d2d; position: sticky; top: 0; width: 50px;">Logo</th>
+                        <th style="padding: 8px; text-align: left; background: #2d2d2d; position: sticky; top: 0; width: 100px;">名称</th>
+                        <th style="padding: 8px; text-align: left; background: #2d2d2d; position: sticky; top: 0; width: 200px;">CA</th>
+                        <th style="padding: 8px; text-align: right; background: #2d2d2d; position: sticky; top: 0; width: 100px;">持有人</th>
+                        <th style="padding: 8px; text-align: right; background: #2d2d2d; position: sticky; top: 0; width: 100px;">市值</th>
+                        <th style="padding: 8px; text-align: right; background: #2d2d2d; position: sticky; top: 0; width: 100px;">VOL</th>
+                        <th style="padding: 8px; text-align: center; background: #2d2d2d; position: sticky; top: 0; width: 100px;">创建时间</th>
                     </tr>
                 `;
 
