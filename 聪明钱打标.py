@@ -20,6 +20,7 @@ CONFIG = {
         "PUMP_TO_BUY": "pump到买入(秒)",
         "BUY_TIME": "买入时间",  # 用于检查买入时间
         "SELL_TIME": "卖出时间",  # 用于检查卖出时间
+        "LAST_ACTIVE_TIME": "最后活跃时间",  # 用于获取最新交易次数
         "HOLDING_TIME": "持有时长(分钟)",
         "BUY_AMOUNT": "买入金额",
         "SELL_AMOUNT": "卖出金额",
@@ -115,15 +116,16 @@ class SmartMoneyTagger:
                 print(
                     f"警告：列 {col} 存在 {self.df[col].isna().sum()} 个 NaN 值，样本: {self.df[self.df[col].isna()][col].head().tolist()}")
 
-        # 转换买入时间和卖出时间为 datetime，处理 N/A 和 1970/1/1
-        buy_time_col = self.config["COLUMNS"]["BUY_TIME"].lower()
-        sell_time_col = self.config["COLUMNS"]["SELL_TIME"].lower()
-        self.df[buy_time_col] = pd.to_datetime(self.df[buy_time_col], errors="coerce")
-        self.df[sell_time_col] = pd.to_datetime(self.df[sell_time_col], errors="coerce")
-        print(f"买入时间列数据类型: {self.df[buy_time_col].dtype}")
-        print(f"买入时间前5个样本: {self.df[buy_time_col].head().tolist()}")
-        print(f"卖出时间列数据类型: {self.df[sell_time_col].dtype}")
-        print(f"卖出时间前5个样本: {self.df[sell_time_col].head().tolist()}")
+        # 转换时间列为 datetime，处理 N/A 和 1970/1/1
+        time_cols = [
+            self.config["COLUMNS"]["BUY_TIME"].lower(),
+            self.config["COLUMNS"]["SELL_TIME"].lower(),
+            self.config["COLUMNS"]["LAST_ACTIVE_TIME"].lower()
+        ]
+        for col in time_cols:
+            self.df[col] = pd.to_datetime(self.df[col], errors="coerce")
+        print(f"时间列数据类型: {', '.join([str(self.df[col].dtype) for col in time_cols])}")
+        print(f"时间列前5个样本: {', '.join([str(self.df[col].head().tolist()) for col in time_cols])}")
 
     def calculate_stats(self) -> None:
         """计算每个地址的统计数据，按地址级别汇总统计"""
@@ -142,6 +144,11 @@ class SmartMoneyTagger:
             print(f"地址 {addr} 实现利润数据: {addr_df[self.config['COLUMNS']['REALIZED_PROFIT'].lower()].tolist()}")
             print(
                 f"地址 {addr} 未实现利润数据: {addr_df[self.config['COLUMNS']['UNREALIZED_PROFIT'].lower()].tolist()}")
+            print(f"地址 {addr} 利润排名数据: {addr_df[self.config['COLUMNS']['PROFIT_RANK'].lower()].tolist()}")
+            print(f"地址 {addr} 买入次数数据: {addr_df[self.config['COLUMNS']['BUY_COUNT'].lower()].tolist()}")
+            print(f"地址 {addr} 卖出次数数据: {addr_df[self.config['COLUMNS']['SELL_COUNT'].lower()].tolist()}")
+            print(
+                f"地址 {addr} 最后活跃时间数据: {addr_df[self.config['COLUMNS']['LAST_ACTIVE_TIME'].lower()].tolist()}")
 
             # 总利润（统计所有行的利润总和）
             realized_profit = addr_df[self.config["COLUMNS"]["REALIZED_PROFIT"].lower()].dropna()
@@ -162,13 +169,32 @@ class SmartMoneyTagger:
                     max_multiple = int(valid_multiples.max()) if valid_multiples.max() > 0 and not np.isinf(
                         valid_multiples.max()) else 0
 
-            # 前10排名次数
-            top_10_count = len(addr_df[addr_df[self.config["COLUMNS"]["PROFIT_RANK"].lower()] <= 10])
+            # 前10排名次数（统计利润排名 < 10 的次数）
+            profit_rank = addr_df[self.config["COLUMNS"]["PROFIT_RANK"].lower()].dropna()
+            top_10_count = len(profit_rank[profit_rank < 10]) if not profit_rank.empty else 0
 
-            # 交易次数和盈利次数
-            trade_count = (addr_df[self.config["COLUMNS"]["BUY_COUNT"].lower()] +
-                           addr_df[self.config["COLUMNS"]["SELL_COUNT"].lower()]).sum()
-            trade_count = int(trade_count) if not pd.isna(trade_count) else 0
+            # 交易次数（以最新最后活跃时间的交易次数为准）
+            last_active_col = self.config["COLUMNS"]["LAST_ACTIVE_TIME"].lower()
+            buy_count_col = self.config["COLUMNS"]["BUY_COUNT"].lower()
+            sell_count_col = self.config["COLUMNS"]["SELL_COUNT"].lower()
+
+            # 按最后活跃时间排序，取最新记录的交易次数
+            latest_record = addr_df.sort_values(by=last_active_col, ascending=False).iloc[0]
+            latest_trade_count = (latest_record[buy_count_col] + latest_record[sell_count_col]) if not pd.isna(
+                latest_record[buy_count_col]) and not pd.isna(latest_record[sell_count_col]) else 0
+            print(f"地址 {addr} 最新交易次数: {latest_trade_count}")
+
+            # 格式化交易次数显示
+            if latest_trade_count < 100:
+                formatted_trade_count = f"{int(latest_trade_count)}"
+            elif 100 <= latest_trade_count < 1000:
+                formatted_trade_count = f"{int(latest_trade_count / 100)}百"
+            elif 1000 <= latest_trade_count < 10000:
+                formatted_trade_count = f"{int(latest_trade_count / 1000)}千"
+            else:
+                formatted_trade_count = f"{int(latest_trade_count / 10000)}万"
+
+            # 盈利次数（以地址为单位统计所有行的总和）
             profit_count = len(addr_df[addr_df[self.config["COLUMNS"]["REALIZED_PROFIT"].lower()] +
                                        addr_df[self.config["COLUMNS"]["UNREALIZED_PROFIT"].lower()] >= self.config[
                                            "PROFIT_THRESHOLD"]])
@@ -212,8 +238,8 @@ class SmartMoneyTagger:
                 "total_profit": total_profit,
                 "max_multiple": max_multiple,
                 "top_10_count": top_10_count,
-                "trade_count": trade_count,
-                "profit_count": profit_count,
+                "latest_trade_count": latest_trade_count,  # 存储最新交易次数
+                "profit_count": profit_count,  # 盈利次数仍按地址总和统计
                 "avg_buy_time": avg_buy_time if avg_buy_time <= 10 else 0,  # 仅存储 <= 10 分钟的平均时间
                 "avg_holding": avg_holding,
                 "occurrence_count": occurrence_count  # 存储出现次数
@@ -230,7 +256,7 @@ class SmartMoneyTagger:
                 "total_profit": 0,
                 "max_multiple": 0,
                 "top_10_count": 0,
-                "trade_count": 0,
+                "latest_trade_count": 0,
                 "profit_count": 0,
                 "avg_buy_time": 0,
                 "avg_holding": np.nan,
@@ -248,13 +274,25 @@ class SmartMoneyTagger:
         else:
             profit_str = f"赚{int(profit / 1000)}K"
 
-        # 倍数（仅显示 >= 10x 的倍数）
+        # 倍数和前10排名（显示在倍数后）
         multiple_str = f"{stats['max_multiple']}x" if stats["max_multiple"] >= 10 else ""
         top_10_str = f"前10({stats['top_10_count']})" if stats["top_10_count"] > 0 else ""
         earning_part = f"{profit_str}{multiple_str}{top_10_str}"
 
-        # 交易次数和盈利次数（改为“交”）
-        trade_part = f"交{stats['trade_count']}/{stats['profit_count']}"
+        # 交易次数和盈利次数（改为“交X盈Y”格式，无逗号）
+        latest_trade_count = stats["latest_trade_count"]
+        profit_count = stats["profit_count"]
+
+        if latest_trade_count < 100:
+            formatted_trade_count = f"{int(latest_trade_count)}"
+        elif 100 <= latest_trade_count < 1000:
+            formatted_trade_count = f"{int(latest_trade_count / 100)}百"
+        elif 1000 <= latest_trade_count < 10000:
+            formatted_trade_count = f"{int(latest_trade_count / 1000)}千"
+        else:
+            formatted_trade_count = f"{int(latest_trade_count / 10000)}万"
+
+        trade_part = f"交{formatted_trade_count}盈{profit_count}" if profit_count > 0 else f"交{formatted_trade_count}"
 
         # 买入时间（只显示 < 600 秒且平均 <= 10 分钟的平均值，单位分钟）
         buy_time = stats["avg_buy_time"]
@@ -271,20 +309,20 @@ class SmartMoneyTagger:
             else:
                 holding_part = f"持{int(holding / 1440)}d"
 
-        # 组合标签，优先保留关键信息并控制长度，去除“:”
+        # 组合标签，优先保留关键信息并控制长度，去除“:”和逗号，使用直接拼接
         tag_parts = [earning_part, trade_part]
         if buy_part:  # 只有当平均买入时间 <= 10 分钟时才添加
             tag_parts.append(buy_part)
         if holding_part:  # 只有在有有效持有时长时才添加
             tag_parts.append(holding_part)
-        tag = ",".join(part for part in tag_parts if part)
+        tag = "".join(part for part in tag_parts if part)  # 取消逗号，使用直接拼接
         if len(tag) > self.config["TAG_MAX_LENGTH"]:
-            tag = f"{earning_part},{trade_part}"[:self.config["TAG_MAX_LENGTH"]]
+            tag = f"{earning_part}{trade_part}"[:self.config["TAG_MAX_LENGTH"]]
 
         # 统计结果（增加地址出现次数）
         occurrence_count = stats["occurrence_count"]
         stats_str = (f"利润:{profit:.0f},倍数:{stats['max_multiple']}x,前10:{stats['top_10_count']},"
-                     f"交:{stats['trade_count']}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
+                     f"交:{latest_trade_count}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
                      f"出现次数:{occurrence_count}")
 
         return tag, stats_str
