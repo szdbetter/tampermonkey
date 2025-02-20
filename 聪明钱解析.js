@@ -90,7 +90,7 @@
     // 调试日志工具
     const DebugLogger = {
         logElement: null,
-
+        
         init() {
             console.log('开始初始化DebugLogger...');
             try {
@@ -102,20 +102,20 @@
                 }
 
                 // 创建新的日志元素
-                this.logElement = document.createElement('div');
+            this.logElement = document.createElement('div');
                 this.logElement.id = 'smart-money-debug-log';
-                this.logElement.style.cssText = `
-                    position: fixed;
-                    bottom: 10px;
-                    right: 10px;
+            this.logElement.style.cssText = `
+                position: fixed;
+                bottom: 10px;
+                right: 10px;
                     width: 95%;
-                    max-height: 300px;
-                    overflow-y: auto;
+                max-height: 300px;
+                overflow-y: auto;
                     background: rgba(0,0,0,0.8);
-                    color: #0f0;
+                color: #0f0;
                     padding: 15px;
                     font-size: 14px;
-                    z-index: 10000;
+                z-index: 10000;
                     border-radius: 10px;
                     line-height: 1.5;
                     display: block !important;
@@ -126,7 +126,7 @@
                     console.log('document.body不存在，等待DOM加载完成');
                     document.addEventListener('DOMContentLoaded', () => {
                         console.log('DOM加载完成，添加日志元素');
-                        document.body.appendChild(this.logElement);
+            document.body.appendChild(this.logElement);
                     });
                 } else {
                     console.log('document.body存在，直接添加日志元素');
@@ -155,22 +155,22 @@
                     return;
                 }
 
-                const timestamp = new Date().toLocaleTimeString();
-                const logMessage = `[${timestamp}] ${message}`;
-
-                const messageElement = document.createElement('div');
-                messageElement.textContent = logMessage;
-
-                switch(type) {
-                    case 'error':
-                        messageElement.style.color = 'red';
-                        break;
-                    case 'warning':
-                        messageElement.style.color = 'yellow';
-                        break;
-                    default:
-                        messageElement.style.color = '#0f0';
-                }
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            
+            const messageElement = document.createElement('div');
+            messageElement.textContent = logMessage;
+            
+            switch(type) {
+                case 'error':
+                    messageElement.style.color = 'red';
+                    break;
+                case 'warning':
+                    messageElement.style.color = 'yellow';
+                    break;
+                default:
+                    messageElement.style.color = '#0f0';
+            }
 
                 this.logElement.insertBefore(messageElement, this.logElement.firstChild);
             } catch (error) {
@@ -250,20 +250,20 @@
                         const errorMsg = '数据库被阻塞，请关闭其他标签页后重试';
                         DebugLogger.log(errorMsg, CONFIG.DEBUG_LEVEL.ERROR);
                         reject(new Error(errorMsg));
-                    };
-
-                    request.onupgradeneeded = (event) => {
+                };
+                
+                request.onupgradeneeded = (event) => {
                         try {
                             DebugLogger.log(`开始数据库升级流程...`, CONFIG.DEBUG_LEVEL.INFO);
-                            const db = event.target.result;
+                    const db = event.target.result;
                             DebugLogger.log(`数据库升级: 当前版本 ${event.oldVersion} -> 新版本 ${event.newVersion}`, CONFIG.DEBUG_LEVEL.INFO);
 
                             // 只在数据表不存在时创建
-                            if (!db.objectStoreNames.contains(this.storeName)) {
+                    if (!db.objectStoreNames.contains(this.storeName)) {
                                 DebugLogger.log('创建新的数据表...', CONFIG.DEBUG_LEVEL.INFO);
-                                const store = db.createObjectStore(this.storeName, {
-                                    keyPath: ['ca', 'address']
-                                });
+                        const store = db.createObjectStore(this.storeName, { 
+                            keyPath: ['ca', 'address'] 
+                        });
 
                                 // 创建索引
                                 const indexes = [
@@ -361,15 +361,15 @@
             return new Promise((resolve, reject) => {
                 const transaction = this.db.transaction([this.storeName], 'readwrite');
                 const store = transaction.objectStore(this.storeName);
-
+                
                 const index = store.index('ca_address');
                 const query = IDBKeyRange.only([trader.ca, trader.address]);
-
+                
                 const request = index.get(query);
-
+                
                 request.onsuccess = (event) => {
                     const existingTrader = event.target.result;
-
+                    
                     if (existingTrader) {
                         const updatedTrader = {
                             ...existingTrader,
@@ -406,7 +406,7 @@
                     }
                     resolve();
                 };
-
+                
                 request.onerror = () => {
                     DebugLogger.log(`存储聪明钱失败: ${trader.address}`, CONFIG.DEBUG_LEVEL.ERROR);
                     reject(request.error);
@@ -481,15 +481,15 @@
                 // 检查CA是否以pump结尾
                 if (ca.toLowerCase().endsWith('pump')) {
                     // 使用现有的PUMP.fun API
-                    return new Promise((resolve, reject) => {
+                return new Promise((resolve, reject) => {
                         DebugLogger.log(`使用PUMP.fun API获取代币名称: ${ca}`);
-                        GM_xmlhttpRequest({
-                            method: 'GET',
+                    GM_xmlhttpRequest({
+                        method: 'GET',
                             url: `${CONFIG.API.TOKEN_SEARCH_URL}?offset=${CONFIG.API.SEARCH_PARAMS.offset}&limit=${CONFIG.API.SEARCH_PARAMS.limit}&sort=${CONFIG.API.SEARCH_PARAMS.sort}&includeNsfw=${CONFIG.API.SEARCH_PARAMS.includeNsfw}&order=${CONFIG.API.SEARCH_PARAMS.order}&searchTerm=${ca}&type=exact`,
-                            onload: (response) => {
-                                try {
-                                    const data = JSON.parse(response.responseText);
-                                    if (data && data.length > 0) {
+                        onload: (response) => {
+                            try {
+                                const data = JSON.parse(response.responseText);
+                                if (data && data.length > 0) {
                                         const tokenInfo = data[0];
                                         DebugLogger.log(`PUMP.fun API获取代币信息成功: ${JSON.stringify(tokenInfo)}`, CONFIG.DEBUG_LEVEL.INFO);
                                         resolve({
@@ -498,7 +498,7 @@
                                             created_timestamp: tokenInfo.created_timestamp,
                                             launch_time: tokenInfo.last_trade_timestamp
                                         });
-                                    } else {
+                                } else {
                                         DebugLogger.log('PUMP.fun API未找到代币名称', CONFIG.DEBUG_LEVEL.WARNING);
                                         resolve({
                                             symbol: 'Unknown Token',
@@ -506,8 +506,8 @@
                                             created_timestamp: null,
                                             launch_time: null
                                         });
-                                    }
-                                } catch (error) {
+                                }
+                            } catch (error) {
                                     DebugLogger.log(`PUMP.fun API解析代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                                     resolve({
                                         symbol: 'Unknown Token',
@@ -515,14 +515,14 @@
                                         created_timestamp: null,
                                         launch_time: null
                                     });
-                                }
-                            },
-                            onerror: (error) => {
-                                DebugLogger.log(`PUMP.fun API获取代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
-                                reject(error);
                             }
-                        });
+                        },
+                        onerror: (error) => {
+                                DebugLogger.log(`PUMP.fun API获取代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                            reject(error);
+                        }
                     });
+                });
                 } else {
                     // 使用 DexScreener API
                     return new Promise((resolve, reject) => {
@@ -551,7 +551,7 @@
                                             launch_time: null
                                         });
                                     }
-                                } catch (error) {
+            } catch (error) {
                                     DebugLogger.log(`DexScreener API解析代币名称失败: ${error}`, CONFIG.DEBUG_LEVEL.ERROR);
                                     resolve({
                                         symbol: 'Unknown Token',
@@ -882,15 +882,14 @@
                 max-width: 1800px;
                 max-height: 90%;
                 background: #1a1a1a;
-                border: 1px solid #333;
+                color: #ffffff;
+                border: 2px solid #333333;
                 border-radius: 10px;
                 padding: 20px;
                 z-index: 10001;
                 overflow: hidden;
                 display: none;
                 flex-direction: column;
-                color: white;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
             `;
 
             // 点击遮罩层关闭窗口
@@ -916,7 +915,13 @@
 
             // 添加查询类型选择
             const queryTypeSelect = document.createElement('select');
-            queryTypeSelect.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd;';
+            queryTypeSelect.style.cssText = `
+                padding: 5px;
+                border-radius: 4px;
+                border: 1px solid #444;
+                background: #2d2d2d;
+                color: #ffffff;
+            `;
             ['聪明钱', '名称', '合约', 'Dev'].forEach(type => {
                 const option = document.createElement('option');
                 option.value = type;
@@ -928,7 +933,14 @@
             const queryInput = document.createElement('input');
             queryInput.type = 'text';
             queryInput.placeholder = '请输入查询内容';
-            queryInput.style.cssText = 'padding: 5px; border-radius: 4px; border: 1px solid #ddd; flex-grow: 1;';
+            queryInput.style.cssText = `
+                padding: 5px;
+                border-radius: 4px;
+                border: 1px solid #444;
+                background: #2d2d2d;
+                color: #ffffff;
+                flex-grow: 1;
+            `;
             // 添加回车触发查询功能
             queryInput.onkeypress = (e) => {
                 if (e.key === 'Enter') {
@@ -1004,7 +1016,13 @@
 
             // 表格容器
             const tableContainer = document.createElement('div');
-            tableContainer.style.cssText = 'overflow-x: auto; max-height: 600px; overflow-y: scroll;';
+            tableContainer.style.cssText = `
+                overflow-x: auto;
+                max-height: 600px;
+                overflow-y: scroll;
+                background: #1a1a1a;
+                color: #ffffff;
+            `;
             this.dataViewerModal.appendChild(tableContainer);
 
             // 按钮容器
@@ -1326,7 +1344,22 @@
 
             // 创建表头
             const thead = document.createElement('thead');
-            thead.style.cssText = 'background-color: #f2f2f2; position: sticky; top: 0; z-index: 1;';
+            thead.innerHTML = `
+                <tr>
+                    <th style="padding: 8px; text-align: center; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">序号</th>
+                    <th style="padding: 8px; text-align: left; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">聪明钱地址</th>
+                    <th style="padding: 8px; text-align: left; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">名称</th>
+                    <th style="padding: 8px; text-align: left; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">合约</th>
+                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">买入金额</th>
+                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">卖出金额</th>
+                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">净买入</th>
+                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">已实现盈亏</th>
+                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">买入次数</th>
+                    <th style="padding: 8px; text-align: right; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">卖出次数</th>
+                    <th style="padding: 8px; text-align: center; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">最后更新</th>
+                    <th style="padding: 8px; text-align: center; background: #1a1a1a; color: #ffffff; border-bottom: 1px solid #333333;">操作</th>
+                </tr>
+            `;
 
             // 添加必要的样式
             const styleSheet = document.createElement('style');
@@ -1934,7 +1967,7 @@
                 }
             `;
             debugButton.onclick = () => {
-                DebugLogger.logElement.style.display =
+                DebugLogger.logElement.style.display = 
                     DebugLogger.logElement.style.display === 'none' ? 'block' : 'none';
             };
 
@@ -2059,10 +2092,12 @@
                 transform: translate(-50%, -50%);
                 width: 80%;
                 max-width: 800px;
-                background: white;
+                background: #1a1a1a;
+                color: #ffffff;
                 padding: 20px;
                 border-radius: 10px;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+                border: 2px solid #333333;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
                 z-index: 10002;
                 display: flex;
                 flex-direction: column;
@@ -2072,7 +2107,7 @@
             // 标题
             const title = document.createElement('h3');
             title.textContent = '数据源测试';
-            title.style.cssText = 'margin: 0; color: #333; text-align: center; padding-bottom: 15px; border-bottom: 1px solid #eee;';
+            title.style.cssText = 'margin: 0; color: #ffffff; text-align: center; padding-bottom: 15px; border-bottom: 1px solid #333333;';
 
             // 输入区域容器
             const inputContainer = document.createElement('div');
@@ -2086,13 +2121,15 @@
             input.style.cssText = `
                 flex: 1;
                 padding: 10px;
-                border: 1px solid #ddd;
+                border: 1px solid #444;
                 border-radius: 5px;
                 font-size: 14px;
+                background: #2d2d2d;
+                color: #ffffff;
                 transition: border-color 0.3s;
             `;
             input.onfocus = () => input.style.borderColor = '#9c27b0';
-            input.onblur = () => input.style.borderColor = '#ddd';
+            input.onblur = () => input.style.borderColor = '#444';
 
             // 查询按钮
             const queryButton = document.createElement('button');
@@ -2112,17 +2149,16 @@
             // 结果显示区域
             const resultArea = document.createElement('div');
             resultArea.style.cssText = `
-                margin-top: 15px;
+                flex: 1;
                 padding: 15px;
-                border: 1px solid #eee;
+                border: 1px solid #444;
                 border-radius: 5px;
-                max-height: 400px;
-                overflow-y: auto;
-                background: #f8f9fa;
+                background: #2d2d2d;
+                color: #ffffff;
                 font-family: monospace;
-                font-size: 14px;
                 white-space: pre-wrap;
-                word-break: break-all;
+                overflow-y: auto;
+                max-height: 400px;
             `;
 
             // 关闭按钮
@@ -2335,7 +2371,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     });
 
                     await this.db.upsertTrader(trader);
-                } catch (error) {
+        } catch (error) {
                     DebugLogger.log(`处理记录失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
                 }
             }
@@ -2398,15 +2434,15 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 max-width: 1800px;
                 max-height: 800px;
                 background: #1a1a1a;
+                color: #ffffff;
                 padding: 20px;
                 border-radius: 10px;
-                border: 1px solid #333;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+                border: 2px solid #333333;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.5);
                 z-index: 10002;
                 display: flex;
                 gap: 20px;
-                font-size: 13px;
-                color: white;
+                font-size:13px;
             `;
 
             // 左侧输入区域
@@ -2417,14 +2453,14 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 display: flex;
                 flex-direction: column;
                 gap: 10px;
-                background: #1a1a1a;
+                background: #2d2d2d;
+                padding: 15px;
                 border-radius: 5px;
-                padding: 10px;
             `;
 
             const title = document.createElement('h3');
             title.textContent = '批量采集';
-            title.style.cssText = 'margin: 0; color: white;';
+            title.style.cssText = 'margin: 0; color: #ffffff;';
 
             const textarea = document.createElement('textarea');
             textarea.placeholder = '请输入CA地址，每行一个';
@@ -2432,73 +2468,19 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 width: 100%;
                 height: 300px;
                 padding: 10px;
-                border: 1px solid #333;
+                border: 1px solid #444;
                 border-radius: 5px;
                 resize: none;
                 font-family: monospace;
                 font-size: 13px;
-                background: #2c2c2c;
-                color: white;
-            `;
-
-            // 右侧状态显示区域
-            const rightPanel = document.createElement('div');
-            rightPanel.style.cssText = `
-                flex: 3;
-                border-left: 1px solid #333;
-                padding-left: 20px;
-                display: flex;
-                flex-direction: column;
                 background: #1a1a1a;
-                border-radius: 5px;
+                color: #ffffff;
             `;
 
-            // 添加筛选条件区域
-            const filterContainer = document.createElement('div');
-            filterContainer.style.cssText = `
-                margin-bottom: 20px;
-                padding: 15px;
-                background: #2c2c2c;
-                border: 1px solid #333;
-                border-radius: 5px;
-                display: flex;
-                gap: 15px;
-                align-items: center;
-                color: white;
-            `;
+            const buttonContainer = document.createElement('div');
+            buttonContainer.style.cssText = 'display: flex; gap: 10px;';
 
-            // 修改输入框和标签的样式
-            const holderLabel = document.createElement('label');
-            holderLabel.textContent = '最少持有人(K):';
-            holderLabel.style.color = 'white';
-            const holderInput = document.createElement('input');
-            holderInput.type = 'number';
-            holderInput.value = '3';
-            holderInput.style.cssText = `
-                width: 60px;
-                padding: 5px;
-                border: 1px solid #444;
-                border-radius: 4px;
-                background: #2c2c2c;
-                color: white;
-            `;
-
-            const marketCapLabel = document.createElement('label');
-            marketCapLabel.textContent = '最小市值(M):';
-            marketCapLabel.style.color = 'white';
-            const marketCapInput = document.createElement('input');
-            marketCapInput.type = 'number';
-            marketCapInput.value = '1';
-            marketCapInput.style.cssText = `
-                width: 60px;
-                padding: 5px;
-                border: 1px solid #444;
-                border-radius: 4px;
-                background: #2c2c2c;
-                color: white;
-            `;
-
-            // 修改时间选择器样式
+            // 时间选择下拉框
             const timeSelect = document.createElement('select');
             timeSelect.style.cssText = `
                 padding: 5px 10px;
@@ -2506,48 +2488,170 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                 border-radius: 4px;
                 margin-right: 10px;
                 height: 30px;
-                background: #2c2c2c;
-                color: white;
+                background: #2d2d2d;
+                color: #ffffff;
+            `;
+            ['1m', '5m', '1h', '6h', '24h'].forEach(time => {
+                const option = document.createElement('option');
+                option.value = time;
+                option.textContent = time;
+                if (time === '24h') option.selected = true;
+                timeSelect.appendChild(option);
+            });
+
+            const startButton = document.createElement('button');
+            startButton.textContent = '开始采集';
+            startButton.style.cssText = `
+                padding: 10px 20px;
+                background: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #444;
+                border-radius: 5px;
+                cursor: pointer;
+                height: 40px;
+                &:hover {
+                    background: #3d3d3d;
+                }
             `;
 
-            // 修改状态容器样式
+            const closeButton = document.createElement('button');
+            closeButton.textContent = '关闭';
+            closeButton.style.cssText = `
+                padding: 10px 20px;
+                background: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #444;
+                border-radius: 5px;
+                cursor: pointer;
+                height: 40px;
+                &:hover {
+                    background: #3d3d3d;
+                }
+            `;
+
+            // 添加GMGN热门(所有)按钮
+            const gmgnAllButton = document.createElement('button');
+            gmgnAllButton.textContent = 'GMGN热门(所有)';
+            gmgnAllButton.style.cssText = `
+                padding: 10px 20px;
+                background: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #444;
+                border-radius: 5px;
+                cursor: pointer;
+                height: 40px;
+                &:hover {
+                    background: #3d3d3d;
+                }
+            `;
+
+            // 添加GMGN热门(PUMP)按钮
+            const gmgnPumpButton = document.createElement('button');
+            gmgnPumpButton.textContent = 'GMGN热门(PUMP)';
+            gmgnPumpButton.style.cssText = `
+                padding: 10px 20px;
+                background: #2d2d2d;
+                color: #ffffff;
+                border: 1px solid #444;
+                border-radius: 5px;
+                cursor: pointer;
+                height: 40px;
+                &:hover {
+                    background: #3d3d3d;
+                }
+            `;
+
+            // 右侧状态显示区域
+            const rightPanel = document.createElement('div');
+            rightPanel.style.cssText = `
+                flex: 3;
+                border-left: 1px solid #eee;
+                padding-left: 20px;
+                display: flex;
+                flex-direction: column;
+            `;
+
+            // 添加筛选条件区域
+            const filterContainer = document.createElement('div');
+            filterContainer.style.cssText = `
+                margin-bottom: 20px;
+                padding: 15px;
+                background: #f8f9fa;
+                border-radius: 5px;
+                display: flex;
+                gap: 15px;
+                align-items: center;
+            `;
+
+            // 持有人输入框
+            const holderContainer = document.createElement('div');
+            holderContainer.style.cssText = 'display: flex; align-items: center; gap: 5px;';
+            const holderLabel = document.createElement('label');
+            holderLabel.textContent = '最少持有人(K):';
+            const holderInput = document.createElement('input');
+            holderInput.type = 'number';
+            holderInput.value = '3';
+            holderInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
+            holderContainer.appendChild(holderLabel);
+            holderContainer.appendChild(holderInput);
+
+            // 市值输入框
+            const marketCapContainer = document.createElement('div');
+            marketCapContainer.style.cssText = 'display: flex; align-items: center; gap: 5px;';
+            const marketCapLabel = document.createElement('label');
+            marketCapLabel.textContent = '最小市值(M):';
+            const marketCapInput = document.createElement('input');
+            marketCapInput.type = 'number';
+            marketCapInput.value = '1';
+            marketCapInput.style.cssText = 'width: 60px; padding: 5px; border: 1px solid #ddd; border-radius: 4px;';
+            marketCapContainer.appendChild(marketCapLabel);
+            marketCapContainer.appendChild(marketCapInput);
+
+            filterContainer.appendChild(holderContainer);
+            filterContainer.appendChild(marketCapContainer);
+
+            const statusTitle = document.createElement('h3');
+            statusTitle.textContent = '采集状态';
+            statusTitle.style.cssText = 'margin: 0; color: #333;';
+
+            // 状态显示区域
             const statusContainer = document.createElement('div');
             statusContainer.style.cssText = `
                 flex: 1;
-                overflow-y: auto;
-                margin-top: 10px;
-                border: 1px solid #333;
+                padding: 15px;
+                background: #2d2d2d;
+                border: 1px solid #333333;
                 border-radius: 5px;
-                padding: 10px;
-                background: #1a1a1a;
-                color: white;
+                overflow-y: auto;
+                max-height: 300px;
+                color: #ffffff;
             `;
 
-            // 修改汇总容器样式
+            // 汇总信息容器
             const summaryContainer = document.createElement('div');
             summaryContainer.style.cssText = `
                 margin-top: 10px;
-                padding: 10px;
-                background: #2c2c2c;
-                border: 1px solid #333;
+                padding: 15px;
+                background: #2d2d2d;
+                border: 1px solid #333333;
                 border-radius: 5px;
-                color: white;
+                color: #ffffff;
             `;
 
-            // GMGN热点数据表格容器样式
+            // GMGN表格容器
             const gmgnTableContainer = document.createElement('div');
             gmgnTableContainer.style.cssText = `
                 display: none;
                 margin-top: 10px;
                 max-height: 500px;
                 overflow-y: auto;
-                background: #1a1a1a;
-                border: 1px solid #333;
+                background: #2d2d2d;
+                border: 1px solid #333333;
                 border-radius: 5px;
                 padding: 10px;
                 position: relative;
                 z-index: 1;
-                color: white;
+                color: #ffffff;
             `;
 
             // 格式化数字为K/M单位
