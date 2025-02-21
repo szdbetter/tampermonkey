@@ -17,7 +17,6 @@
 // @connect      memego.ai
 // @connect      pump.fun
 // @connect      gmgn.ai
-// @connect      cloudbypass.com
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -862,7 +861,7 @@
                         .map(buyer => `${buyer.name}(${buyer.amount.toFixed(0)} SOL)`)
                         .join('、')}\n\n`;
                 }
-
+/*
                 // 交易数据
                 message += `📈 买入：${alert.buyCount}次 / ${alert.buyAmount.toFixed(0)} SOL\n`;
                 message += `📉 卖出：${alert.sellCount}次 / ${alert.sellAmount.toFixed(0)} SOL\n`;
@@ -879,7 +878,7 @@
                 // 快速交易链接
                     message += `🚀 快速交易：\n`;
                     message += `🤖 <a href="https://t.me/GMGN_sol_bot?start=${alert.tokenContract}">GMGN BOT</a>\n\n`;
-
+*/
                 // 查看更多信息链接
                 message += `📊 更多信息：\n`;
                 message += `🔗 <a href="https://gmgn.ai/sol/token/${alert.tokenContract}">GMGN</a>| `;
