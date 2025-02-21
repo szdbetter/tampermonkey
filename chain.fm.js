@@ -471,7 +471,7 @@
 
         // Telegram 机器人配置
         const TELEGRAM_CONFIG = {
-            botToken: '7763135679:AAGO76od2voY4I0dDmlS98w7PgzQb3VP7u0', // 新机器人的API令牌
+            botToken: '7763135679:', // 新机器人的API令牌
             defaultChatId: '5001695999',                                 // 默认接收消息的聊天ID
             commands: {
                 start: '/start',           // 订阅命令
