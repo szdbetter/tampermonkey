@@ -2597,6 +2597,255 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             filterContainer.appendChild(holderContainer);
             filterContainer.appendChild(marketCapContainer);
 
+            // 添加地址采集区域
+            const addressCollectContainer = document.createElement('div');
+            addressCollectContainer.style.cssText = `
+                margin-top: 15px;
+                padding: 10px;
+                background: #f8f9fa;
+                border-radius: 5px;
+                display: flex;
+                gap: 10px;
+                align-items: center;
+            `;
+
+            // 地址输入框
+            const addressInput = document.createElement('input');
+            addressInput.type = 'text';
+            addressInput.placeholder = '输入钱包地址';
+            addressInput.style.cssText = `
+                flex: 1;
+                padding: 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 14px;
+            `;
+
+            // GMGN CA按钮
+            const gmgnCAButton = document.createElement('button');
+            gmgnCAButton.textContent = 'GMGN CA(从地址采集)';
+            gmgnCAButton.style.cssText = `
+                padding: 8px 15px;
+                background: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                white-space: nowrap;
+            `;
+
+            // 添加按钮点击事件
+            gmgnCAButton.onclick = async () => {
+                const address = addressInput.value.trim();
+                if (!address) {
+                    alert('请输入钱包地址');
+                    return;
+                }
+
+                // 验证地址格式（简单验证，确保长度在32-44之间）
+                if (address.length < 32 || address.length > 44) {
+                    alert('请输入有效的钱包地址');
+                    return;
+                }
+
+                gmgnCAButton.disabled = true;
+                gmgnCAButton.textContent = '采集中...';
+                statusContainer.innerHTML = '准备开始采集地址数据...';
+
+                try {
+                    let allTokens = new Set(); // 使用Set去重
+                    let pageCount = 1;
+                    let nextCursor = null;
+                    
+                    // 构建基础URL
+                    const baseUrl = new URL('https://gmgn.ai/api/v1/wallet_holdings/sol/' + address);
+                    const params = {
+                        'device_id': '520cc162-92cd-4ee6-9add-25e40e359805',
+                        'client_id': 'gmgn_web_2025.0221.110436',
+                        'from_app': 'gmgn',
+                        'app_ver': '2025.0221.110436',
+                        'tz_name': 'Asia/Shanghai',
+                        'tz_offset': '28800',
+                        'app_lang': 'zh-CN',
+                        'limit': '50',
+                        'orderby': 'last_active_timestamp',
+                        'direction': 'desc',
+                        'showsmall': 'true',
+                        'sellout': 'true',
+                        'tx30d': 'true'
+                    };
+
+                    do {
+                        // 更新状态显示
+                        statusContainer.innerHTML = `正在获取第 ${pageCount} 页数据...`;
+                        DebugLogger.log(`开始获取第 ${pageCount} 页数据`, CONFIG.DEBUG_LEVEL.INFO);
+
+                        // 设置URL参数
+                        const currentUrl = new URL(baseUrl);
+                        Object.entries(params).forEach(([key, value]) => {
+                            currentUrl.searchParams.append(key, value);
+                        });
+                        // 只有在nextCursor有值且不为空字符串时才添加cursor参数
+                        if (nextCursor && nextCursor !== '') {
+                            currentUrl.searchParams.append('cursor', nextCursor);
+                        }
+
+                        // 记录请求URL
+                        const requestUrl = currentUrl.toString();
+                        DebugLogger.log(`请求URL: ${requestUrl}`, CONFIG.DEBUG_LEVEL.INFO);
+
+                        // 发起请求
+                        const response = await new Promise((resolve, reject) => {
+                            GM_xmlhttpRequest({
+                                method: 'GET',
+                                url: requestUrl,
+                                headers: {
+                                    'Accept': 'application/json, text/plain, */*',
+                                    'Accept-Encoding': 'gzip, deflate, br',
+                                    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                                    'Origin': 'https://gmgn.ai',
+                                    'Referer': 'https://gmgn.ai/',
+                                    'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+                                    'sec-ch-ua-mobile': '?0',
+                                    'sec-ch-ua-platform': '"macOS"',
+                                    'Sec-Fetch-Dest': 'empty',
+                                    'Sec-Fetch-Mode': 'cors',
+                                    'Sec-Fetch-Site': 'same-origin',
+                                    'Connection': 'keep-alive',
+                                    'Host': 'gmgn.ai',
+                                    'Cookie': document.cookie, // 添加当前页面的cookie
+                                    'x-requested-with': 'XMLHttpRequest'
+                                },
+                                withCredentials: true, // 允许发送cookie
+                                onload: (response) => {
+                                    try {
+                                        // 记录响应状态和头信息
+                                        DebugLogger.log(`响应状态码: ${response.status}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        DebugLogger.log(`响应头: ${response.responseHeaders}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        
+                                        // 如果收到新的cookie，保存它
+                                        const setCookie = response.responseHeaders.match(/set-cookie: ([^\n]*)/gi);
+                                        if (setCookie) {
+                                            DebugLogger.log(`收到新的Cookie: ${setCookie}`, CONFIG.DEBUG_LEVEL.INFO);
+                                        }
+
+                                        // 记录响应内容（前1000个字符）
+                                        DebugLogger.log(`响应内容(前1000字符): ${response.responseText.substring(0, 1000)}...`, CONFIG.DEBUG_LEVEL.INFO);
+
+                                        // 检查响应状态
+                                        if (response.status === 403) {
+                                            DebugLogger.log('收到403错误，可能需要通过Cloudflare验证', CONFIG.DEBUG_LEVEL.ERROR);
+                                            reject(new Error('需要通过网站验证，请先在浏览器中访问GMGN网站'));
+                                            return;
+                                        }
+
+                                        if (response.status !== 200) {
+                                            reject(new Error(`请求失败，状态码: ${response.status}`));
+                                            return;
+                                        }
+                                        
+                                        // 检查响应类型
+                                        const contentType = response.responseHeaders.match(/content-type:\s*(.*?)(;|$)/i);
+                                        if (!contentType || !contentType[1].includes('application/json')) {
+                                            DebugLogger.log(`响应类型不是JSON: ${contentType ? contentType[1] : '未知'}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                            reject(new Error('服务器返回了非JSON数据，请先在浏览器中访问GMGN网站'));
+                                            return;
+                                        }
+
+                                        resolve(response);
+                                    } catch (error) {
+                                        DebugLogger.log(`响应处理错误: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                        reject(error);
+                                    }
+                                },
+                                onerror: (error) => {
+                                    DebugLogger.log(`请求错误: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                                    reject(new Error(`请求失败: ${error.message}`));
+                                },
+                                ontimeout: () => {
+                                    DebugLogger.log('请求超时', CONFIG.DEBUG_LEVEL.ERROR);
+                                    reject(new Error('请求超时'));
+                                },
+                                timeout: 30000
+                            });
+                        });
+
+                        let data;
+                        try {
+                            data = JSON.parse(response.responseText);
+                            // 记录解析后的数据结构
+                            DebugLogger.log(`解析后的数据结构: ${JSON.stringify({
+                                code: data.code,
+                                message: data.message,
+                                next: data.next,
+                                holdingsCount: data.data?.holdings?.length || 0
+                            }, null, 2)}`, CONFIG.DEBUG_LEVEL.INFO);
+
+                            if (data.code !== 0) {
+                                throw new Error(`API返回错误: ${data.message || '未知错误'}`);
+                            }
+                        } catch (error) {
+                            DebugLogger.log(`解析响应数据失败: ${response.responseText.substring(0, 200)}...`, CONFIG.DEBUG_LEVEL.ERROR);
+                            throw new Error('解析响应数据失败');
+                        }
+                        
+                        // 处理返回的数据
+                        if (data.data && data.data.holdings) {
+                            const newTokens = data.data.holdings
+                                .filter(holding => holding.token && holding.token.address)
+                                .map(holding => holding.token.address);
+                            
+                            // 记录本次获取的token
+                            DebugLogger.log(`本页获取到的Token: ${JSON.stringify(newTokens)}`, CONFIG.DEBUG_LEVEL.INFO);
+                            
+                            // 修正next值的获取路径
+                            const nextValue = data.data.next;
+                            DebugLogger.log(`本页next值: ${nextValue}`, CONFIG.DEBUG_LEVEL.INFO);
+                            
+                            // 添加新的Token并更新textarea
+                            newTokens.forEach(token => allTokens.add(token));
+                            textarea.value = Array.from(allTokens).join('\n');
+                            
+                            // 更新进度
+                            const currentCount = allTokens.size;
+                            statusContainer.innerHTML = `已获取 ${currentCount} 个Token CA (第 ${pageCount} 页)`;
+                            DebugLogger.log(`第 ${pageCount} 页处理完成，当前共有 ${currentCount} 个Token`, CONFIG.DEBUG_LEVEL.INFO);
+
+                            // 检查是否有下一页
+                            nextCursor = nextValue;
+                            if (!nextCursor || nextCursor === '') {
+                                DebugLogger.log('数据获取完成', CONFIG.DEBUG_LEVEL.INFO);
+                                break;
+                            }
+                            
+                            // 增加页码计数
+                            pageCount++;
+                        }
+
+                        // 添加延时，避免请求过快
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+
+                    } while (nextCursor !== null);
+
+                    // 更新最终状态
+                    statusContainer.innerHTML = `✓ 采集完成，共获取 ${allTokens.size} 个Token CA`;
+                    DebugLogger.log(`采集完成，总共获取到 ${allTokens.size} 个Token CA`, CONFIG.DEBUG_LEVEL.INFO);
+
+                } catch (error) {
+                    statusContainer.innerHTML = `✗ 采集失败: ${error.message}`;
+                    DebugLogger.log(`采集失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                } finally {
+                    gmgnCAButton.disabled = false;
+                    gmgnCAButton.textContent = 'GMGN CA(从地址采集)';
+                }
+            };
+
+            // 将新元素添加到容器中
+            addressCollectContainer.appendChild(addressInput);
+            addressCollectContainer.appendChild(gmgnCAButton);
+            filterContainer.appendChild(addressCollectContainer);
+
             const statusTitle = document.createElement('h3');
             statusTitle.textContent = '采集状态';
             statusTitle.style.cssText = 'margin: 0; color: #ffffff;';
