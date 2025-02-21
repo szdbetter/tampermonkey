@@ -2656,7 +2656,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     let allTokens = new Set(); // 使用Set去重
                     let pageCount = 1;
                     let nextCursor = null;
-                    
+
                     // 构建基础URL
                     const baseUrl = new URL('https://gmgn.ai/api/v1/wallet_holdings/sol/' + address);
                     const params = {
@@ -2723,7 +2723,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                                         // 记录响应状态和头信息
                                         DebugLogger.log(`响应状态码: ${response.status}`, CONFIG.DEBUG_LEVEL.INFO);
                                         DebugLogger.log(`响应头: ${response.responseHeaders}`, CONFIG.DEBUG_LEVEL.INFO);
-                                        
+
                                         // 如果收到新的cookie，保存它
                                         const setCookie = response.responseHeaders.match(/set-cookie: ([^\n]*)/gi);
                                         if (setCookie) {
@@ -2744,7 +2744,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                                             reject(new Error(`请求失败，状态码: ${response.status}`));
                                             return;
                                         }
-                                        
+
                                         // 检查响应类型
                                         const contentType = response.responseHeaders.match(/content-type:\s*(.*?)(;|$)/i);
                                         if (!contentType || !contentType[1].includes('application/json')) {
@@ -2789,24 +2789,24 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                             DebugLogger.log(`解析响应数据失败: ${response.responseText.substring(0, 200)}...`, CONFIG.DEBUG_LEVEL.ERROR);
                             throw new Error('解析响应数据失败');
                         }
-                        
+
                         // 处理返回的数据
                         if (data.data && data.data.holdings) {
                             const newTokens = data.data.holdings
                                 .filter(holding => holding.token && holding.token.address)
                                 .map(holding => holding.token.address);
-                            
+
                             // 记录本次获取的token
                             DebugLogger.log(`本页获取到的Token: ${JSON.stringify(newTokens)}`, CONFIG.DEBUG_LEVEL.INFO);
-                            
+
                             // 修正next值的获取路径
                             const nextValue = data.data.next;
                             DebugLogger.log(`本页next值: ${nextValue}`, CONFIG.DEBUG_LEVEL.INFO);
-                            
+
                             // 添加新的Token并更新textarea
                             newTokens.forEach(token => allTokens.add(token));
                             textarea.value = Array.from(allTokens).join('\n');
-                            
+
                             // 更新进度
                             const currentCount = allTokens.size;
                             statusContainer.innerHTML = `已获取 ${currentCount} 个Token CA (第 ${pageCount} 页)`;
@@ -2818,7 +2818,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                                 DebugLogger.log('数据获取完成', CONFIG.DEBUG_LEVEL.INFO);
                                 break;
                             }
-                            
+
                             // 增加页码计数
                             pageCount++;
                         }
@@ -2844,7 +2844,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             // 将新元素添加到容器中
             addressCollectContainer.appendChild(addressInput);
             addressCollectContainer.appendChild(gmgnCAButton);
-            filterContainer.appendChild(addressCollectContainer);
+            //filterContainer.appendChild(addressCollectContainer);
 
             const statusTitle = document.createElement('h3');
             statusTitle.textContent = '采集状态';
@@ -3161,6 +3161,8 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             //rightPanel.appendChild(filterContainer);
 
             filterContainer.appendChild(buttonContainer);
+
+            rightPanel.appendChild(addressCollectContainer);
 
             rightPanel.appendChild(filterContainer);
 
