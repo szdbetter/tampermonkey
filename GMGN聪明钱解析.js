@@ -2947,7 +2947,7 @@ DebugLogger.log(`queryType= ${queryType} ,queryValue=${queryType}：`, CONFIG.DE
                             const existingTrader = request.result;
                             if (existingTrader) {
                                 updated++;
-                                DebugLogger.log(`[UPDATE]: ${trader.address} (${trader.user_name || '未知用户名'}=)`, CONFIG.DEBUG_LEVEL.INFO);
+                                DebugLogger.log(`[UPDATE]: ${trader.address} (${trader.user_name || '未知用户名'})`, CONFIG.DEBUG_LEVEL.INFO);
                             } else {
                                 inserted++;
                                 DebugLogger.log(`[INSERT]: ${trader.address} (${trader.user_name || '未知用户名'})`, CONFIG.DEBUG_LEVEL.WARNING);

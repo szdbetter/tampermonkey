@@ -4,9 +4,45 @@ from typing import Dict, Tuple, Optional
 import os
 from datetime import datetime
 
+# 用户可配置的门槛和排序变量
+TAGGING_THRESHOLDS = {
+    "MAX_PROFIT_THRESHOLD": 100_000_000,  # 最大利润（超过不显示盈利金额）
+    "MIN_MULTIPLIER_THRESHOLD": 10,  # 最小倍数（低于此值不显示倍数）
+    "MAX_MULTIPLIER_THRESHOLD": float('inf'),  # 最大倍数（超过不显示倍数）
+    "MIN_TOP_10_COUNT_THRESHOLD": 1,  # 利润前10的最小出现次数（低于不显示前10）
+    "MAX_TRADE_COUNT_THRESHOLD": 200,  # 最大交易次数（超过不显示交易次数）
+    "MAX_HOLDING_TIME_THRESHOLD": float('inf')  # 最大持有时长（分钟，超过不显示持有时长）
+}
+
+# 增加报错阀值设置
+ERROR_THRESHOLDS = {
+    "MAX_PROFIT_AMOUNT_THRESHOLD": 100_000_000,  # 最大利润金额（超过显示红色错误）
+    "MAX_MULTIPLIER_THRESHOLD": 10000,  # 最大利润倍数（超过显示红色错误）
+    "MAX_TRADE_COUNT_THRESHOLD": 200  # 最大交易次数（超过显示红色错误）
+}
+
+# 用户可配置的排序规则
+SORT_FIELDS = [
+    "occurrence_count",  # 盈利次数（倒序）
+    "max_multiple",  # 盈利倍数（倒序）
+    "top_10_count",  # 利润排名前10次数（倒序）
+    "buy_count_within_10m",  # 前10分钟买入次数（倒序）
+    "total_profit"  # 盈利金额（倒序）
+]
+SORT_ASCENDING = [False, False, False, False, False]  # 对应字段的排序顺序（False=倒序，True=顺序）
+
+# 中文字段映射（用于排序依据显示）
+CHINESE_FIELD_MAPPING = {
+    "occurrence_count": "盈利次数",
+    "total_profit": "盈利金额",
+    "max_multiple": "盈利倍数",
+    "top_10_count": "利润排名前 10 次数",
+    "buy_count_within_10m": "前 10 分钟买入次数"
+}
+
 # 配置变量统一管理（根据实际列名调整为小写）
 CONFIG = {
-    "INPUT_FILE": "聪明钱数据_2025_2_20_12_18_20.xlsx",
+    "INPUT_FILE": "聪明钱数据_2025_2_22_16_04_42.xlsx",
     "OUTPUT_FILE": f"smartmoney_tagged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
     "PROFIT_THRESHOLD": 3000,
     "PUMP_BUY_THRESHOLD": 600,  # 前10分钟阈值（秒）
@@ -127,6 +163,14 @@ class SmartMoneyTagger:
         print(f"时间列数据类型: {', '.join([str(self.df[col].dtype) for col in time_cols])}")
         print(f"时间列前5个样本: {', '.join([str(self.df[col].head().tolist()) for col in time_cols])}")
 
+        # 验证最后活跃时间列是否有异常值
+        last_active_col = self.config["COLUMNS"]["LAST_ACTIVE_TIME"].lower()
+        invalid_times = self.df[
+            self.df[last_active_col].isna() | (self.df[last_active_col] == pd.Timestamp("1970-01-01"))]
+        if not invalid_times.empty:
+            print(
+                f"警告：最后活跃时间列存在 {len(invalid_times)} 个异常值，样本: {invalid_times[last_active_col].head().tolist()}")
+
     def calculate_stats(self) -> None:
         """计算每个地址的统计数据，按地址级别汇总统计"""
         addresses = self.df[self.config["COLUMNS"]["ADDRESS"].lower()].unique()
@@ -158,6 +202,9 @@ class SmartMoneyTagger:
             print(
                 f"地址 {addr} 总利润计算: 实现利润总和 = {realized_profit.sum()}, 未实现利润总和 = {unrealized_profit.sum()}, 总利润 = {total_profit}")
 
+            # 特殊处理：如果总盈利金额超过 1 亿，不打标
+            is_profit_invalid = total_profit > 100_000_000  # 1 亿
+
             # 最大倍数（统计相同地址的最大盈利倍数）
             buy_amount = addr_df[self.config["COLUMNS"]["BUY_AMOUNT"].lower()].dropna()
             sell_amount = addr_df[self.config["COLUMNS"]["SELL_AMOUNT"].lower()].dropna()
@@ -178,10 +225,19 @@ class SmartMoneyTagger:
             buy_count_col = self.config["COLUMNS"]["BUY_COUNT"].lower()
             sell_count_col = self.config["COLUMNS"]["SELL_COUNT"].lower()
 
-            # 按最后活跃时间排序，取最新记录的交易次数
-            latest_record = addr_df.sort_values(by=last_active_col, ascending=False).iloc[0]
-            latest_trade_count = (latest_record[buy_count_col] + latest_record[sell_count_col]) if not pd.isna(
-                latest_record[buy_count_col]) and not pd.isna(latest_record[sell_count_col]) else 0
+            # 过滤掉无效的最后活跃时间（NaN 或 1970-01-01）
+            valid_addr_df = addr_df[
+                (addr_df[last_active_col].notna()) &
+                (addr_df[last_active_col] != pd.Timestamp("1970-01-01"))
+                ]
+
+            if not valid_addr_df.empty:
+                # 按最后活跃时间排序，取最新记录的交易次数
+                latest_record = valid_addr_df.sort_values(by=last_active_col, ascending=False).iloc[0]
+                latest_trade_count = (latest_record[buy_count_col] + latest_record[sell_count_col]) if not pd.isna(
+                    latest_record[buy_count_col]) and not pd.isna(latest_record[sell_count_col]) else 0
+            else:
+                latest_trade_count = 0  # 如果无有效最后活跃时间，默认交易次数为 0
             print(f"地址 {addr} 最新交易次数: {latest_trade_count}")
 
             # 格式化交易次数显示
@@ -206,9 +262,18 @@ class SmartMoneyTagger:
             print(f"地址 {addr} pump到买入(秒) 有效值 (< 600 秒): {fast_buys.tolist()}")
             avg_buy_time = int(fast_buys.mean() / 60) if not fast_buys.empty else 0  # 单位：分钟
 
-            # 只有当平均买入时间 <= 10 分钟时才显示
+            # 前 10 分钟内的买入次数（统计 pump到买入(秒) < 600 秒 的买入次数总和）
+            buy_count_within_10m = addr_df[
+                addr_df[pump_to_buy_col].notna() &
+                (addr_df[pump_to_buy_col] <= self.config["PUMP_BUY_THRESHOLD"])
+                ][self.config["COLUMNS"]["BUY_COUNT"].lower()].sum()
+            buy_count_within_10m = int(buy_count_within_10m) if not pd.isna(buy_count_within_10m) else 0
+            print(f"地址 {addr} 前 10 分钟内买入次数: {buy_count_within_10m}")
+
+            # 只有当平均买入时间 <= 10 分钟时才显示，且不超过最大持有时长阈值
             buy_part = ""
-            if avg_buy_time > 0 and avg_buy_time <= 10:  # 仅当 <= 10 分钟时显示
+            if (avg_buy_time > 0 and avg_buy_time <= 10 and
+                    avg_buy_time <= TAGGING_THRESHOLDS["MAX_HOLDING_TIME_THRESHOLD"] / 60):  # 转换为分钟
                 buy_part = f"买{avg_buy_time}m"
 
             # 平均买入时间和持有时长（统计相同地址的平均值，跳过 pump到买入(秒) 或 卖出时间 为 NaN 的行）
@@ -229,7 +294,7 @@ class SmartMoneyTagger:
             holding_times = valid_rows[holding_time_col].dropna()
             avg_holding = holding_times.mean() if not holding_times.empty else np.nan  # 使用 NaN 表示无有效持有时长
 
-            # 地址出现次数
+            # 地址出现次数（用于排序）
             occurrence_count = len(addr_df)
             print(f"地址 {addr} 出现次数: {occurrence_count}")
 
@@ -240,9 +305,13 @@ class SmartMoneyTagger:
                 "top_10_count": top_10_count,
                 "latest_trade_count": latest_trade_count,  # 存储最新交易次数
                 "profit_count": profit_count,  # 盈利次数仍按地址总和统计
-                "avg_buy_time": avg_buy_time if avg_buy_time <= 10 else 0,  # 仅存储 <= 10 分钟的平均时间
+                "avg_buy_time": avg_buy_time if (avg_buy_time <= 10 and
+                                                 avg_buy_time <= TAGGING_THRESHOLDS[
+                                                     "MAX_HOLDING_TIME_THRESHOLD"] / 60) else 0,
                 "avg_holding": avg_holding,
-                "occurrence_count": occurrence_count  # 存储出现次数
+                "occurrence_count": occurrence_count,  # 存储出现次数
+                "buy_count_within_10m": buy_count_within_10m,  # 存储前 10 分钟内的买入次数
+                "is_profit_invalid": is_profit_invalid  # 标记总盈利是否超过 1 亿
             }
 
         # 将临时统计数据赋值给 address_stats
@@ -260,70 +329,104 @@ class SmartMoneyTagger:
                 "profit_count": 0,
                 "avg_buy_time": 0,
                 "avg_holding": np.nan,
-                "occurrence_count": 0
+                "occurrence_count": 0,
+                "buy_count_within_10m": 0,
+                "is_profit_invalid": False
             }
 
         stats = self.address_stats[addr]
 
-        # 赚钱能力（统计所有行的利润总和）
-        profit = stats["total_profit"]
-        if profit >= 1000000:
-            profit_str = f"赚{int(profit / 1000000)}M"
-        elif profit >= 10000:
-            profit_str = f"赚{int(profit / 10000)}万"
-        else:
-            profit_str = f"赚{int(profit / 1000)}K"
+        # 检查报错阀值
+        error_message = None
+        if stats["total_profit"] > ERROR_THRESHOLDS["MAX_PROFIT_AMOUNT_THRESHOLD"]:
+            error_message = f"错误：{stats['total_profit']}最大利润超过阀值"
+        elif stats["max_multiple"] > ERROR_THRESHOLDS["MAX_MULTIPLIER_THRESHOLD"]:
+            error_message = f"错误：{stats['max_multiple']}最大倍数超过阀值"
+        elif stats["latest_trade_count"] > ERROR_THRESHOLDS["MAX_TRADE_COUNT_THRESHOLD"]:
+            error_message = f"错误：{stats['latest_trade_count']}最大交易次数超过阀值"
 
-        # 倍数和前10排名（显示在倍数后）
-        multiple_str = f"{stats['max_multiple']}x" if stats["max_multiple"] >= 10 else ""
-        top_10_str = f"前10({stats['top_10_count']})" if stats["top_10_count"] > 0 else ""
-        earning_part = f"{profit_str}{multiple_str}{top_10_str}"
-
-        # 交易次数和盈利次数（改为“交X盈Y”格式，无逗号）
-        latest_trade_count = stats["latest_trade_count"]
-        profit_count = stats["profit_count"]
-
-        if latest_trade_count < 100:
-            formatted_trade_count = f"{int(latest_trade_count)}"
-        elif 100 <= latest_trade_count < 1000:
-            formatted_trade_count = f"{int(latest_trade_count / 100)}百"
-        elif 1000 <= latest_trade_count < 10000:
-            formatted_trade_count = f"{int(latest_trade_count / 1000)}千"
-        else:
-            formatted_trade_count = f"{int(latest_trade_count / 10000)}万"
-
-        trade_part = f"交{formatted_trade_count}盈{profit_count}" if profit_count > 0 else f"交{formatted_trade_count}"
-
-        # 买入时间（只显示 < 600 秒且平均 <= 10 分钟的平均值，单位分钟）
-        buy_time = stats["avg_buy_time"]
-        buy_part = f"买{buy_time}m" if buy_time > 0 else ""
-
-        # 持有时长（如果无有效卖出时间，不显示）
-        holding = stats["avg_holding"]
-        holding_part = ""
-        if not pd.isna(holding):
-            if holding < self.config["HOLDING_SHORT_THRESHOLD"]:
-                holding_part = f"持{int(holding)}m"
-            elif holding < self.config["HOLDING_DAY_THRESHOLD"]:
-                holding_part = f"持{int(holding / 60)}h"
+        # 如果总盈利超过 1 亿，或达到报错阀值，不打标
+        if stats["is_profit_invalid"] or error_message:
+            if not error_message:
+                tag = ""  # 空标签（总盈利超过 1 亿）
+                stats_str = (f"利润:{stats['total_profit']:.0f},盈利金额错误!")
             else:
-                holding_part = f"持{int(holding / 1440)}d"
+                tag = error_message  # 显示红色错误信息
+                stats_str = (f"利润:{stats['total_profit']:.0f},{error_message}")
+        else:
+            # 赚钱能力（统计所有行的利润总和）
+            profit = stats["total_profit"]
+            profit_part = ""
+            if profit <= TAGGING_THRESHOLDS["MAX_PROFIT_THRESHOLD"]:
+                if profit >= 1000000:
+                    profit_str = f"赚{int(profit / 1000000)}M"
+                elif profit >= 10000:
+                    profit_str = f"赚{int(profit / 10000)}万"
+                else:
+                    profit_str = f"赚{int(profit / 1000)}K"
+                profit_part = profit_str
+            else:
+                profit_part = ""  # 超过最大利润阈值，不显示盈利金额
 
-        # 组合标签，优先保留关键信息并控制长度，去除“:”和逗号，使用直接拼接
-        tag_parts = [earning_part, trade_part]
-        if buy_part:  # 只有当平均买入时间 <= 10 分钟时才添加
-            tag_parts.append(buy_part)
-        if holding_part:  # 只有在有有效持有时长时才添加
-            tag_parts.append(holding_part)
-        tag = "".join(part for part in tag_parts if part)  # 取消逗号，使用直接拼接
-        if len(tag) > self.config["TAG_MAX_LENGTH"]:
-            tag = f"{earning_part}{trade_part}"[:self.config["TAG_MAX_LENGTH"]]
+            # 倍数（仅当 >= 最小倍数且 <= 最大倍数时显示）
+            multiple_str = ""
+            if (stats["max_multiple"] >= TAGGING_THRESHOLDS["MIN_MULTIPLIER_THRESHOLD"] and
+                    stats["max_multiple"] <= TAGGING_THRESHOLDS["MAX_MULTIPLIER_THRESHOLD"]):
+                multiple_str = f"{stats['max_multiple']}x" if stats["max_multiple"] >= 10 else ""
 
-        # 统计结果（增加地址出现次数）
-        occurrence_count = stats["occurrence_count"]
-        stats_str = (f"利润:{profit:.0f},倍数:{stats['max_multiple']}x,前10:{stats['top_10_count']},"
-                     f"交:{latest_trade_count}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
-                     f"出现次数:{occurrence_count}")
+            # 前10排名（仅当 >= 最小出现次数时显示）
+            top_10_str = ""
+            if stats["top_10_count"] >= TAGGING_THRESHOLDS["MIN_TOP_10_COUNT_THRESHOLD"]:
+                top_10_str = f"前10({stats['top_10_count']})" if stats["top_10_count"] > 0 else ""
+
+            earning_part = f"{profit_part}{multiple_str}{top_10_str}"
+
+            # 交易次数（仅当 <= 最大交易次数时显示）
+            latest_trade_count = stats["latest_trade_count"]
+            trade_part = ""
+            if latest_trade_count <= TAGGING_THRESHOLDS["MAX_TRADE_COUNT_THRESHOLD"]:
+                if latest_trade_count < 100:
+                    formatted_trade_count = f"{int(latest_trade_count)}"
+                elif 100 <= latest_trade_count < 1000:
+                    formatted_trade_count = f"{int(latest_trade_count / 100)}百"
+                elif 1000 <= latest_trade_count < 10000:
+                    formatted_trade_count = f"{int(latest_trade_count / 1000)}千"
+                else:
+                    formatted_trade_count = f"{int(latest_trade_count / 10000)}万"
+
+                profit_count = stats["profit_count"]
+                trade_part = f"交{formatted_trade_count}胜{profit_count}" if profit_count > 0 else f"交{formatted_trade_count}"
+            else:
+                trade_part = ""  # 超过最大交易次数阈值，不显示交易次数
+
+            # 买入时间（只显示 < 600 秒且平均 <= 10 分钟的平均值，单位分钟）
+            buy_time = stats["avg_buy_time"]
+            buy_part = ""
+            if buy_time > 0:
+                buy_part = f"买{buy_time}m"
+
+            # 持有时长（仅当 <= 最大持有时长时显示）
+            holding = stats["avg_holding"]
+            holding_part = ""
+            if not pd.isna(holding) and holding <= TAGGING_THRESHOLDS["MAX_HOLDING_TIME_THRESHOLD"]:
+                if holding < self.config["HOLDING_SHORT_THRESHOLD"]:
+                    holding_part = f"持{int(holding)}m"
+                elif holding < self.config["HOLDING_DAY_THRESHOLD"]:
+                    holding_part = f"持{int(holding / 60)}h"
+                else:
+                    holding_part = f"持{int(holding / 1440)}d"
+
+            # 组合标签，优先保留关键信息并控制长度，去除“:”和逗号，使用直接拼接
+            tag_parts = [part for part in [earning_part, trade_part, buy_part, holding_part] if part]
+            tag = "".join(tag_parts)  # 取消逗号，使用直接拼接
+            if len(tag) > self.config["TAG_MAX_LENGTH"]:
+                tag = f"{earning_part}{trade_part}"[:self.config["TAG_MAX_LENGTH"]]
+
+            # 统计结果（增加地址出现次数）
+            occurrence_count = stats["occurrence_count"]
+            stats_str = (f"利润:{profit:.0f},倍数:{stats['max_multiple']}x,前10:{stats['top_10_count']},"
+                         f"交:{latest_trade_count}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
+                         f"出现次数:{occurrence_count}")
 
         return tag, stats_str
 
@@ -332,24 +435,81 @@ class SmartMoneyTagger:
         self.load_data(self.config["INPUT_FILE"])
         self.calculate_stats()
 
-        tags = []
-        stats_list = []
-        for addr in self.df[self.config["COLUMNS"]["ADDRESS"].lower()].unique():  # 使用 unique() 避免重复
+        # 获取所有地址的统计结果
+        stats_df = []
+        for addr in self.address_stats.keys():
             tag, stats = self.generate_tag(addr)
-            tags.append(tag)
-            stats_list.append(stats)
+            stats_data = self.address_stats[addr]
+            stats_df.append({
+                self.config["COLUMNS"]["ADDRESS"]: addr,
+                "用户标签": tag,
+                "统计结果": stats,
+                "occurrence_count": stats_data["occurrence_count"],  # 盈利次数（地址出现次数）
+                "total_profit": stats_data["total_profit"],  # 盈利金额
+                "max_multiple": stats_data["max_multiple"],  # 盈利倍数
+                "top_10_count": stats_data["top_10_count"],  # 利润排名在前10的次数
+                "buy_count_within_10m": stats_data["buy_count_within_10m"]  # 前10分钟内的买入次数
+            })
 
-        # 创建一个新的 DataFrame 映射地址到标签和统计结果
-        address_mapping = pd.DataFrame({
-            self.config["COLUMNS"]["ADDRESS"].lower(): self.df[self.config["COLUMNS"]["ADDRESS"].lower()].unique(),
-            "用户标签": tags,
-            "统计结果": stats_list
-        })
+        # 转换为 DataFrame
+        result_df = pd.DataFrame(stats_df)
 
-        # 合并到原始 DataFrame，确保每行显示相同地址的最终统计结果
-        self.df = self.df.merge(address_mapping, on=self.config["COLUMNS"]["ADDRESS"].lower(), how="left")
+        # 按排序规则排序（用户自定义排序字段和顺序）
+        result_df = result_df.sort_values(by=SORT_FIELDS, ascending=SORT_ASCENDING)
 
-        self.df.to_excel(self.config["OUTPUT_FILE"], index=False)
+        # 只保留需要的列：地址、用户标签、统计结果
+        result_df = result_df[[self.config["COLUMNS"]["ADDRESS"], "用户标签", "统计结果"]]
+
+        # 重命名列为中文
+        result_df.columns = ["地址", "用户标签", "统计结果"]
+
+        # 生成排序依据描述（使用中文字段名）
+        sort_description = ", ".join([
+            f"{CHINESE_FIELD_MAPPING[field]}（{'倒序' if not asc else '顺序'}）"
+            for field, asc in zip(SORT_FIELDS, SORT_ASCENDING)
+        ])
+
+        # 添加排序依据字段
+        result_df["排序依据"] = sort_description
+
+        # 保存到 Excel 文件
+        result_df.to_excel(self.config["OUTPUT_FILE"], index=False)
+
+        # 尝试使用 openpyxl 设置红色的感叹号和错误标签
+        try:
+            from openpyxl import load_workbook
+            from openpyxl.styles import Font, Color
+
+            # 加载工作簿
+            wb = load_workbook(self.config["OUTPUT_FILE"])
+            ws = wb.active
+
+            # 找到 "用户标签" 和 "统计结果" 列
+            tag_col = result_df.columns.get_loc("用户标签") + 1  # Excel 列索引从 1 开始
+            stats_col = result_df.columns.get_loc("统计结果") + 1  # Excel 列索引从 1 开始
+
+            # 遍历每一行，检查用户标签和统计结果是否包含错误信息
+            for row in ws.rows:
+                tag_cell = row[tag_col - 1]  # 用户标签列的单元格
+                stats_cell = row[stats_col - 1]  # 统计结果列的单元格
+
+                # 检查用户标签是否为错误信息
+                if tag_cell.value and "错误：" in str(tag_cell.value):
+                    tag_cell.font = Font(color="FF0000")  # 设置红色字体
+
+                # 检查统计结果是否包含 "盈利金额错误!"
+                if stats_cell.value and "盈利金额错误!" in str(stats_cell.value):
+                    stats_cell.font = Font(color="FF0000")  # 设置红色字体
+
+            # 保存修改后的文件
+            wb.save(self.config["OUTPUT_FILE"])
+            print(f"已为错误标签和统计结果添加红色感叹号！")
+
+        except ImportError:
+            print("警告：无法安装 openpyxl，无法设置红色感叹号。确保已安装 openpyxl 库。")
+        except Exception as e:
+            print(f"警告：设置红色感叹号或错误标签时出错: {str(e)}")
+
         print(f"处理完成，结果已保存至 {self.config['OUTPUT_FILE']}")
 
 
