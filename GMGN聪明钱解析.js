@@ -31,7 +31,7 @@
         MAX_TRADERS: 50,
 
         // 最后活跃天数（默认7天）
-        LAST_ACTIVE_DAYS: 7,
+        LAST_ACTIVE_DAYS: 3,
 
         // 每页显示记录数
         PAGE_SIZE: 50,
@@ -86,6 +86,277 @@
             }
         }
     };
+
+    // API配置
+    const API_CONFIG = {
+        // GMGN API
+        GMGN: {
+            BASE_URL: 'https://gmgn.ai',
+            ENDPOINTS: {
+                TOP_TRADERS: '/defi/quotation/v1/tokens/top_traders/sol/{ca}',
+                TOKEN_SEARCH: '/coins/search'
+            },
+            HEADERS: {
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Origin': 'https://gmgn.ai',
+                'Referer': 'https://gmgn.ai/',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Sec-Fetch-Dest': 'empty',
+                'Sec-Fetch-Mode': 'cors',
+                'Sec-Fetch-Site': 'cross-site'
+            },
+            SEARCH_PARAMS: {
+                offset: 0,
+                limit: 10,
+                sort: 'created_timestamp',
+                includeNsfw: false,
+                order: 'desc',
+                type: 'exact'
+            }
+        },
+
+        // PUMP.fun API
+        PUMP: {
+            BASE_URL: 'https://frontend-api-v3.pump.fun',
+            ENDPOINTS: {
+                TOKEN_INFO: '/coins/search'
+            }
+        },
+
+        // DexScreener API
+        DEXSCREENER: {
+            BASE_URL: 'https://api.dexscreener.com',
+            ENDPOINTS: {
+                TOKEN_INFO: '/latest/dex/tokens/{ca}'
+            }
+        }
+    };
+
+    // 数据解析配置
+    const PARSER_CONFIG = {
+        // 时间格式化
+        TIME: {
+            DEFAULT_TIMEZONE: 'Asia/Shanghai',
+            DEFAULT_LOCALE: 'zh-CN',
+            FORMATS: {
+                DATETIME: {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false
+                },
+                DATE: {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit'
+                }
+            }
+        },
+
+        // 数值格式化
+        NUMBER: {
+            DEFAULT_DECIMALS: 0,
+            VOLUME_DECIMALS: 2,
+            BALANCE_DECIMALS: 1,
+            PROFIT_DECIMALS: 0,
+            USE_GROUPING: true,
+            GROUP_SEPARATOR: ',',
+            DECIMAL_SEPARATOR: '.'
+        },
+
+        // 数据字段解析规则
+        FIELDS: {
+            // 数值字段的单位转换
+            UNITS: {
+                SOL_DECIMALS: 8,  // SOL余额精度
+                USDC_DECIMALS: 6  // USDC精度
+            },
+
+            // 字段默认值
+            DEFAULTS: {
+                STRING: '',
+                NUMBER: 0,
+                BOOLEAN: false,
+                ARRAY: [],
+                OBJECT: {}
+            },
+
+            // 字段验证规则
+            VALIDATION: {
+                CA: {
+                    pattern: '^[A-Za-z0-9]{32,44}$',
+                    message: '无效的合约地址'
+                },
+                ADDRESS: {
+                    pattern: '^[A-Za-z0-9]{32,44}$',
+                    message: '无效的钱包地址'
+                },
+                PROFIT: {
+                    min: -1000000000,
+                    max: 1000000000,
+                    message: '利润超出合理范围'
+                }
+            }
+        }
+    };
+
+    // 存储配置
+    const STORAGE_CONFIG = {
+        // localStorage键名
+        KEYS: {
+            LAST_PUSH_INFO: 'chainFM_lastPushInfo',
+            PUSH_HISTORY: 'chainFM_pushHistory',
+            PUSH_COUNT: 'chainFM_pushCount',
+            SUBSCRIBERS: 'chainFM_subscribers',
+            PROCESSED_MESSAGES: 'chainFM_processedMessages',
+            SETTINGS: 'chainFM_settings'
+        },
+
+        // 数据清理配置
+        CLEANUP: {
+            MAX_HISTORY_DAYS: 7,
+            MAX_CACHE_SIZE: 1000,
+            CLEANUP_INTERVAL: 24 * 60 * 60 * 1000  // 24小时
+        }
+    };
+
+    // 字段映射配置
+    const FIELDS_CONFIG = {
+        // 数据库字段映射
+        DB: {
+            STORE_NAME: 'traders',
+            KEY_PATH: ['ca', 'address'],
+            INDEXES: {
+                CA: 'ca',
+                ADDRESS: 'address',
+                PROFIT: 'realizedProfit',
+                LAST_ACTIVE: 'lastActiveAt'
+            }
+        },
+
+        // API响应字段映射
+        API: {
+            TRADER: {
+                CA: 'ca',
+                ADDRESS: 'address',
+                FROM_ADDRESS: 'native_transfer.from_address',
+                IS_SUSPICIOUS: 'is_suspicious',
+                REALIZED_PROFIT: 'realized_profit',
+                UNREALIZED_PROFIT: 'unrealized_profit',
+                LAST_ACTIVE_AT: 'last_active_at',
+                HOLDING_PERIOD: 'holding_period',
+                BUY_AFTER_LAUNCH: 'buy_after_launch_interval',
+                NATIVE_TRANSFER: 'native_transfer',
+                LABELS: 'labels'
+            }
+        },
+
+        // Excel导入导出字段映射
+        EXCEL: {
+            COLUMN_MAPPING: {
+                'CA': 'ca',
+                '地址': 'address',
+                '资金来源': 'from_name',
+                '来源地址': 'from_address',
+                '是否可疑': 'is_suspicious',
+                '已实现收益': 'realizedProfit',
+                '未实现收益': 'unrealizedProfit',
+                '最后活跃时间': 'lastActiveAt',
+                '持仓时长': 'holdingPeriod',
+                '买入时机': 'buyAfterLaunchInterval',
+                '标签': 'labels'
+            },
+            NUMERIC_FIELDS: ['realizedProfit', 'unrealizedProfit', 'holdingPeriod', 'buyAfterLaunchInterval'],
+            DATE_FIELDS: ['lastActiveAt'],
+            BOOLEAN_FIELDS: ['is_suspicious']
+        },
+
+        // UI表格字段映射
+        TABLE: {
+            COLUMNS: [
+                { field: 'ca', title: 'CA', width: '100px' },
+                { field: 'address', title: '地址', width: '100px' },
+                { field: 'realizedProfit', title: '已实现收益', width: '80px' },
+                { field: 'unrealizedProfit', title: '未实现收益', width: '80px' },
+                { field: 'lastActiveAt', title: '最后活跃时间', width: '120px' },
+                { field: 'holdingPeriod', title: '持仓时长', width: '60px' },
+                { field: 'buyAfterLaunchInterval', title: '买入时机', width: '60px' },
+                { field: 'labels', title: '标签', width: '100px' },
+                { field: 'from_address', title: '资金来源', width: '100px' },
+                { field: 'is_suspicious', title: '是否可疑', width: '60px' }
+            ],
+            SORTABLE_FIELDS: ['realizedProfit', 'unrealizedProfit', 'lastActiveAt', 'holdingPeriod', 'buyAfterLaunchInterval']
+        }
+    };
+
+    // ====================== 字段映射配置结束 ======================
+
+    // ====================== 配置区域开始 ======================
+
+    // UI配置
+    const UI_CONFIG = {
+        // 主题配置
+        THEME: {
+            COLORS: {
+                PRIMARY: '#1890ff',
+                SUCCESS: '#52c41a',
+                WARNING: '#faad14',
+                ERROR: '#f5222d',
+                TEXT: '#000000d9',
+                BACKGROUND: '#ffffff'
+            },
+            FONTS: {
+                FAMILY: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                SIZE: {
+                    SMALL: '12px',
+                    NORMAL: '14px',
+                    LARGE: '16px'
+                }
+            }
+        },
+
+        // 布局配置
+        LAYOUT: {
+            CONTAINER: {
+                WIDTH: '100%',
+                MAX_WIDTH: '1200px',
+                PADDING: '20px'
+            },
+            TABLE: {
+                MIN_WIDTH: '800px',
+                MAX_HEIGHT: '600px',
+                HEADER_HEIGHT: '40px',
+                ROW_HEIGHT: '32px'
+            }
+        },
+
+        // 分页配置
+        PAGINATION: {
+            PAGE_SIZES: [10, 20, 50, 100],
+            DEFAULT_PAGE_SIZE: 20
+        },
+
+        // 动画配置
+        ANIMATION: {
+            DURATION: '0.3s',
+            TIMING: 'ease-in-out'
+        },
+
+        // 进度条配置
+        PROGRESS_BAR: {
+            HEIGHT: '2px',
+            BACKGROUND: '#f5f5f5',
+            FOREGROUND: '#1890ff',
+            TRANSITION: 'width 0.3s ease-in-out'
+        }
+    };
+
+    // ====================== UI配置结束 ======================
+
+    // ====================== 配置区域结束 ======================
 
     // 调试日志工具
     const DebugLogger = {
@@ -178,6 +449,7 @@
             }
         },
 
+        /*
         // 新增表格输出方法
         logTable(data, title = '数据详情') {
             console.table(data);
@@ -198,6 +470,75 @@
                 console.error('添加表格日志失败:', error);
             }
         }
+        */
+
+        logTable(data, title = '数据详情') {
+            // 先确保数据存在
+            if (!data || !Array.isArray(data) || data.length === 0) {
+                DebugLogger.log('没有数据可以显示', CONFIG.DEBUG_LEVEL.WARNING);
+                return;
+            }
+
+            // 打印到控制台
+            console.table(data);
+
+            try {
+                // 确保日志元素存在
+                if (!this.logElement) {
+                    DebugLogger.log('日志元素不存在，重新初始化', CONFIG.DEBUG_LEVEL.WARNING);
+                    this.init();
+                }
+
+                // 创建表格元素
+                const table = document.createElement('table');
+                table.style.cssText = `
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            color: #0ff;
+            font-family: monospace;
+        `;
+
+                // 添加标题
+                const caption = table.createCaption();
+                caption.textContent = title;
+                caption.style.fontWeight = 'bold';
+                caption.style.marginBottom = '5px';
+
+                // 添加表头
+                const thead = table.createTHead();
+                const headerRow = thead.insertRow();
+                Object.keys(data[0]).forEach(key => {
+                    const th = document.createElement('th');
+                    th.style.cssText = 'padding: 5px; border: 1px solid #444; text-align: left;';
+                    th.textContent = key;
+                    headerRow.appendChild(th);
+                });
+
+                // 添加数据行
+                const tbody = table.createTBody();
+                data.forEach(item => {
+                    const row = tbody.insertRow();
+                    Object.values(item).forEach(value => {
+                        const cell = row.insertCell();
+                        cell.style.cssText = 'padding: 5px; border: 1px solid #444;';
+                        cell.textContent = value;
+                    });
+                });
+
+                // 添加到日志元素
+                if (this.logElement) {
+                    this.logElement.insertBefore(table, this.logElement.firstChild);
+                    //DebugLogger.log('表格已添加到日志元素', CONFIG.DEBUG_LEVEL.INFO);
+                } else {
+                    DebugLogger.log('日志元素不存在，无法添加表格', CONFIG.DEBUG_LEVEL.ERROR);
+                }
+            } catch (error) {
+                DebugLogger.log(`创建表格失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                console.error('创建表格失败:', error);
+            }
+        }
+
     };
 
     class SmartMoneyDatabase {
@@ -371,6 +712,16 @@
                     const existingTrader = event.target.result;
 
                     if (existingTrader) {
+
+                        /*DebugLogger.log(`现有记录的关键字段：
+                            地址: ${existingTrader.address}
+                            来源地址: ${existingTrader.from_address}
+                            是否可疑: ${existingTrader.is_suspicious}
+                            是否转入: ${existingTrader.transfer_in}
+                            来源名称: ${existingTrader.from_name}
+                        `, CONFIG.DEBUG_LEVEL.INFO);*/
+
+
                         const updatedTrader = {
                             ...existingTrader,
                             buy_volume: trader.buy_volume,
@@ -396,13 +747,31 @@
                             holding_period: trader.holding_period,
 
                             // 新增 buy_after_launch_interval 字段
-                            buy_after_launch_interval: trader.buy_after_launch_interval
+                            buy_after_launch_interval: trader.buy_after_launch_interval,
+
+                            // 新增 transfer_in,资金来源名称，资金来源地址，是否可疑 字段
+                            transfer_in: trader.transfer_in,
+                            from_name: trader.from_name,
+                            from_address: trader.from_address,
+                            is_suspicious: trader.is_suspicious,
                         };
+
+                        // 记录更新后的对象的关键字段
+                        /*DebugLogger.log(`更新后的对象关键字段：
+                            地址: ${updatedTrader.address}
+                            资金来源: ${updatedTrader.from_address}
+                            是否可疑: ${updatedTrader.is_suspicious}
+                            是否转入: ${updatedTrader.transfer_in}
+                            来源名称: ${updatedTrader.from_name}
+                        `, CONFIG.DEBUG_LEVEL.WARNING);*/
+
+
+
                         store.put(updatedTrader);
-                        DebugLogger.log(`更新聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
+                        DebugLogger.log(`[UPDATE]: ${trader.address} (${trader.user_name || 'Unknown'}, 资金来源:${trader.from_address}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
                     } else {
                         store.put(trader);
-                        DebugLogger.log(`新增聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
+                        DebugLogger.log(`[INSERT]聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 资金来源:${trader.from_address}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
                     }
                     resolve();
                 };
@@ -413,6 +782,39 @@
                 };
             });
         }
+
+
+        //2025/02/24新增，通过地址查询数据库中的记录信息，方便调试
+        //返回的是数组！！！需要用[0]的方式调用 ；
+        async getTraderByAddress(address) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const transaction = this.db.transaction([this.storeName], 'readonly');
+                    const store = transaction.objectStore(this.storeName);
+                    const index = store.index('address');
+                    const request = index.getAll(address);
+
+                    request.onsuccess = () => {
+                        const traders = request.result;
+                        if (traders && traders.length > 0) {
+                            //DebugLogger.log(`查询到地址 ${address} 的数据\n${JSON.stringify(traders, null, 2)}`, CONFIG.DEBUG_LEVEL.WARNING);
+                        } else {
+                            DebugLogger.log(`未找到地址 ${address} 的数据\n`, CONFIG.DEBUG_LEVEL.ERROR);
+                        }
+                        resolve(traders);
+                    };
+
+                    request.onerror = () => {
+                        DebugLogger.log(`查询地址 ${address} 失败\n ${request.error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                        reject(request.error);
+                    };
+                } catch (error) {
+                    DebugLogger.log(`查询过程出错\n${error}`, CONFIG.DEBUG_LEVEL.ERROR);
+                    reject(error);
+                }
+            });
+        }
+
     }
 
     class DataCollector {
@@ -433,7 +835,7 @@
                 'NO.', '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)',
                 '持有时长(分钟)', '买入金额', '卖出金额', '买入次数', '卖出次数', '实现利润', '未实现利润',
-                'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
+                'Twitter', '用户名', '利润排名','是否转入','资金来源','来源地址','是否可疑', '标签1', '标签2', '标签3', '更新时间'
             ]); // 默认全选
         }
 
@@ -654,21 +1056,46 @@
                     ((a.realized_profit || 0) + (a.unrealized_profit || 0))
                 ).slice(0, CONFIG.MAX_TRADERS);
 
-                DebugLogger.log(`解析到 ${data.length} 条交易数据，过滤后 ${filteredData.length} 条，保留前 ${filteredData.length} 名`, CONFIG.DEBUG_LEVEL.INFO);
+                DebugLogger.log(`解析到 ${data.length} 条交易数据，过滤后 ${filteredData.length} 条，保留前 ${filteredData.length} 名`, CONFIG.DEBUG_LEVEL.WARNING);
+
+                /*
+                //DebugLogger.log(`第一条记录的原始数据： ${JSON.stringify(data[0], null, 2)}`, CONFIG.DEBUG_LEVEL.WARNING);
+                //DebugLogger.log(`资金来源地址: ${data[0].native_transfer.from_address}`, CONFIG.DEBUG_LEVEL.ERROR);//注意：这里获取资金来源地址
+                //DebugLogger.log(`是否可疑: ${data[0].is_suspicious}`, CONFIG.DEBUG_LEVEL.ERROR);
 
                 // 打印前5条数据的详细信息
-                const previewData = filteredData.slice(0, 5).map((item, index) => ({
-                    '利润排名': index + 1,
-                    'Address': item.address,
-                    '买入量': Math.round(item.buy_volume_cur || 0),
-                    '卖出量': Math.round(item.sell_volume_cur || 0),
-                    '实现利润': Math.round(item.realized_profit || 0),
-                    '用户名': item.name || 'Unknown',
-                    'Twitter用户名': item.twitter_username || 'N/A'
-                }));
-                DebugLogger.logTable(previewData, '交易数据预览（前5条）');
+                // 在处理之前打印原始数据
+                //DebugLogger.log(`filteredData原始数据长度: ${filteredData?.length || 0}`, CONFIG.DEBUG_LEVEL.INFO);
+                //DebugLogger.log(`filteredData原始数据内容: ${JSON.stringify(filteredData?.slice(0,1))}`, CONFIG.DEBUG_LEVEL.INFO);
+                // 添加 previewData 的调试日志
 
+                const previewData = filteredData.slice(0, 5).map((item, index) => {
+                    const preview = {
+                        '利润排名': index + 1,
+                        'Address': item.address,
+                        '买入量': Math.round(item.buy_volume_cur || 0),
+                        '卖出量': Math.round(item.sell_volume_cur || 0),
+                        '实现利润': Math.round(item.realized_profit || 0),
+                        '用户名': item.name || 'Unknown',
+                        'Twitter用户名': item.twitter_username || 'N/A',
+                        'from_address': item.from_address || 'N/A',
+                        '是否可疑': item.is_suspicious || 'N/A',
+                    };
+                    // 打印每条转换后的数据
+                    DebugLogger.log(`第${index + 1}条数据转换结果: ${JSON.stringify(preview)}`, CONFIG.DEBUG_LEVEL.INFO);
+                    return preview;
+                });
+
+                // 打印转换后的完整预览数据
+                //DebugLogger.log(`预览数据完整内容: ${JSON.stringify(previewData)}`, CONFIG.DEBUG_LEVEL.INFO);
+
+                // 使用console.table直接打印（确保数据正确）
+                console.table(previewData);
+
+                // 最后尝试使用logTable
+                //DebugLogger.logTable(previewData, '交易数据预览（前5条）');
                 this.updateProgressBar(70);
+                */
 
                 const processedTraders = [];
                 for (const [index, item] of filteredData.entries()) {
@@ -700,32 +1127,58 @@
                     const trader = {
                         token: this.tokenName.symbol,
                         ca: this.currentCA,
+                        dev: this.tokenName.dev,
+                        create_time: this.tokenName.created_timestamp,
+                        launch_time: this.tokenName.launch_time ? new Date(this.tokenName.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
                         address: item.address,
+                        sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
+                        last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19) : null,
                         buy_volume: Math.round(item.buy_volume_cur) || 0,
                         sell_volume: Math.round(item.sell_volume_cur) || 0,
                         buy_tx_count: Math.round(item.buy_tx_count_cur) || 0,
                         sell_tx_count: Math.round(item.sell_tx_count_cur) || 0,
                         realized_profit: Math.round(item.realized_profit) || 0,
                         unrealized_profit: Math.round(item.unrealized_profit) || 0,
-                        twitter_username: item.twitter_username || '',
-                        user_name: item.name || '',
                         profit_tag: index + 1,
-                        tag_1: '',
-                        tag_2: '',
-                        tag_3: '',
-                        dev: this.tokenName.dev,
-                        create_time: this.tokenName.created_timestamp,
-                        launch_time: this.tokenName.launch_time ? new Date(this.tokenName.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
-                        sol_balance: Number((item.sol_balance / Math.pow(10, 8)).toFixed(1)),
-                        last_active_time: item.last_active_timestamp ? new Date(item.last_active_timestamp * 1000).toISOString().replace('T', ' ').slice(0, 19) : null,
+                        user_name: item.name || '',
+                        twitter_username: item.twitter_username || '',
                         start_holding_at: new Date(item.start_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }),
                         end_holding_at: item.end_holding_at
                             ? new Date(item.end_holding_at * 1000).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
                             : null,
                         holding_period: holdingPeriod,
                         buy_after_launch_interval: buyAfterLaunchInterval,
-                        update_time: this.getBeijingTime()
+
+
+                        //2025/02/23，新增4个字段：transfer_in,资金来源（名称），资金来源（地址），是否可疑
+                        transfer_in : item.transfer_in || false,
+                        from_name : item.native_transfer.from_name || 'N/A',
+                        from_address : item.native_transfer.from_address || '资金来源地址为空',
+                        is_suspicious : item.is_suspicious || false,
+                        //
+
+                        tag_1: '',
+                        tag_2: '',
+                        tag_3: '',
+                        update_time: this.getBeijingTime(),
+
                     };
+
+/*// 添加这些日志
+DebugLogger.log(`准备更新到数据库的数据：
+    地址: ${item.address}
+    原始数据:
+    - native_transfer: ${JSON.stringify(item.native_transfer)}
+    - is_suspicious: ${item.is_suspicious}
+    - transfer_in: ${item.transfer_in}
+    - from_name: ${item.from_name}
+
+    处理后的trader对象:
+    - from_address: ${trader.from_address}
+    - is_suspicious: ${trader.is_suspicious}
+    - transfer_in: ${trader.transfer_in}
+    - from_name: ${trader.from_name}
+`, CONFIG.DEBUG_LEVEL.INFO);*/
 
                     // 在实际写入数据库时设置update_time
                     trader.update_time = this.getBeijingTime();
@@ -738,6 +1191,13 @@
                 DebugLogger.logTable(processedTraders, '处理的交易者数据');
 
                 DebugLogger.log('数据更新成功', CONFIG.DEBUG_LEVEL.INFO);
+
+                // 查询特定地址的数据,getTraderByAddress中默认就带了打印数据功能；
+                //const address = 'HABhDh9zrzf8mA4SBo1yro8M6AirH2hZdLNPpuvMH6iA';
+                //const traderData = await this.db.getTraderByAddress(address);
+                //DebugLogger.log(`地址 ${address} 在数据库中的完整数据：`, CONFIG.DEBUG_LEVEL.INFO);
+                //DebugLogger.log(JSON.stringify(traderData, null, 2), CONFIG.DEBUG_LEVEL.INFO);
+
                 this.updateProgressBar(100);
                 setTimeout(() => {
                     if (this.progressBar) {
@@ -808,8 +1268,15 @@
                             twitter_username: row['Twitter'],
                             user_name: row['用户名'],
                             profit_tag: parseInt(row['利润排名']),
+                            buy_after_launch_interval: row['Pump到买入(秒)'] !== 'N/A' ? parseInt(row['Pump到买入(秒)']) : null,
+                            profit_tag: parseInt(row['是否转入']),
+                            profit_tag: parseInt(row['资金来源']),
+                            profit_tag: parseInt(row['资金地址']),
+                            profit_tag: parseInt(row['是否可疑']),
+                            profit_tag: parseInt(row['tag_1']),
+                            profit_tag: parseInt(row['tag_2']),
+                            profit_tag: parseInt(row['tag_3']),
                             update_time: this.getBeijingTime(),
-                            buy_after_launch_interval: row['Pump到买入(秒)'] !== 'N/A' ? parseInt(row['Pump到买入(秒)']) : null
                         };
 
                         // 检查记录是否存在
@@ -1144,6 +1611,8 @@
          * @param {string} queryValue 查询值
          */
         async loadAndDisplayData(queryType = '', queryValue = '') {
+DebugLogger.log(`queryType= ${queryType} ,queryValue=${queryType}：`, CONFIG.DEBUG_LEVEL.INFO);
+
             const tableContainer = this.dataViewerModal.children[2];
             const endTimer = this.performanceMonitor.startTimer('loadData');
 
@@ -1337,6 +1806,10 @@
                 'Twitter': '50px',
                 '用户名': '50px',
                 '利润排名': '30px',
+                '是否转入': '50px',
+                '资金来源': '50px',
+                '来源地址': '100px',
+                '是否可疑': '50px',
                 '标签1': '50px',
                 '标签2': '50px',
                 '标签3': '50px',
@@ -1355,10 +1828,14 @@
                 }
                 .smart-money-row:hover {
                     background-color: #f5f5f5;
-                }
+                    background-color: #2d2d2d;  /* 悬停时稍亮的深色 */
+                    color: #00ff00;             /* 悬停时绿色文字 */
+                    box-shadow: 0 0 10px rgba(0, 255, 0, 0.1);  /* 添加微弱的绿色阴影 */
+                 }
                 .smart-money-row.selected {
-                    background-color: #e8f5e9;
-                    border-left: 4px solid #4CAF50;
+                    background-color: #003300;  /* 选中时的深绿色背景 */
+                    color: #00ff00;             /* 选中时的亮绿色文字 */
+                    border-left: 4px solid #00ff00;  /* 更亮的绿色边框 */
                 }
             `;
             document.head.appendChild(styleSheet);
@@ -1368,7 +1845,7 @@
                 '名称', '合约', '聪明钱', 'Dev', 'Pump内盘发射',
                 'SOL余额', '最后活跃时间', '买入时间', '卖出时间', 'Pump到买入(秒)', '持有时长(分钟)',
                 '买入金额', '卖出金额', '买入次数', '卖出次数', '实现利润', '未实现利润',
-                'Twitter', '用户名', '利润排名', '标签1', '标签2', '标签3', '更新时间'
+                'Twitter', '用户名','是否转入','资金来源','来源地址','是否可疑', '利润排名', '标签1', '标签2', '标签3', '更新时间'
             ];
 
             headers.forEach((headerText, index) => {
@@ -1423,7 +1900,11 @@
             const colors = [
                 '#FFB6C1', '#98FB98', '#87CEFA', '#DDA0DD', '#F0E68C',
                 '#E6E6FA', '#FFA07A', '#98FF98', '#B0E0E6', '#FFB6C1',
-                '#FFDAB9', '#B0C4DE', '#F0FFF0', '#FFF0F5', '#F5F5DC'
+                '#FFDAB9', '#B0C4DE', '#F0FFF0', '#FFF0F5', '#F5F5DC',
+                // 新增的颜色
+                '#E0FFFF', '#FFE4E1', '#98FF98', '#D8BFD8', '#AFEEEE',
+                '#FFE4B5', '#F0F8FF', '#F5DEB3', '#E6E6FA', '#FFF0F5',
+                '#F0FFFF', '#FAF0E6', '#FFF5EE', '#F5F5F5', '#FFFACD'
             ];
 
             // 为重复的地址分配颜色
@@ -1475,9 +1956,9 @@
 
             // 使用正确获取的查询参数
             if (currentQueryType && currentQueryValue) {
-                title.textContent = `聪明钱数据库 (查询到 ${filteredCount} 条记录，${tokenCount}个代币，总计${totalCount}条记录，${totalUniqueTokens}个代币)`;
+                title.textContent = `聪明钱数据库 (查询到 ${filteredCount} 条记录，${tokenCount}个CA，总计${totalCount}条记录，${totalUniqueTokens}个CA)`;
             } else {
-                title.textContent = `聪明钱数据库 (共${totalUniqueTokens}个代币，${totalCount}条记录)`;
+                title.textContent = `聪明钱数据库 (共${totalUniqueTokens}个CA，${totalCount}条记录)`;
             }
 
             // 创建表体
@@ -1499,6 +1980,38 @@
                     row.classList.add('selected');
                 };
 
+            const columnWidths = {
+                'NO.': '20px',  // 添加序号列的宽度
+                '名称': '50px',
+                '合约': '100px',
+                '聪明钱': '100px',
+                'Dev': '100px',
+                'Pump内盘发射': '120px',
+                'SOL余额': '80px',
+                '最后活跃时间': '120px',
+                '买入时间': '120px',
+                '卖出时间': '120px',
+                'Pump到买入(秒)': '100px',
+                '持有时长(分钟)': '100px',
+                '买入金额': '60px',
+                '卖出金额': '60px',
+                '买入次数': '60px',
+                '卖出次数': '60px',
+                '实现利润': '70px',
+                '未实现利润': '70px',
+                'Twitter': '50px',
+                '用户名': '50px',
+                '是否转入': '50px',
+                '资金来源': '50px',
+                '来源地址': '50px',
+                '是否可疑': '50px',
+                '利润排名': '30px',
+                '标签1': '50px',
+                '标签2': '50px',
+                '标签3': '50px',
+                '更新时间': '120px'
+            };
+
                 const rowData = [
                     trader.token,
                     trader.ca,
@@ -1519,7 +2032,12 @@
                     trader.unrealized_profit !== undefined ? this.formatNumberWithCommas(trader.unrealized_profit) : 'N/A',
                     trader.twitter_username || 'N/A',
                     trader.user_name || 'N/A',
+                    trader.transfer_in || false,
+                    trader.from_name || 'N/A',
+                    trader.from_address || 'N/A',
+                    trader.is_suspicious || false,
                     trader.profit_tag || 'N/A',
+
                     trader.tag_1 || '',
                     trader.tag_2 || '',
                     trader.tag_3 || '',
@@ -1533,7 +2051,7 @@
                         td.dataset.originalValue = cellData;
 
                         // 可编辑的列（除了某些特殊列）
-                        const editableColumns = [ 0, 3, 17, 18, 20, 21, 22]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
+                        const editableColumns = [ 0, 3, 17, 18, 24, 25, 26]; // 名称、Dev、推特、用户名、标签1、标签2、标签3
 
                         // 处理Twitter链接
                         if (index === 17 && cellData !== 'N/A') {  // Twitter列
@@ -1683,9 +2201,9 @@
                                                     }
                                                     break;
 
-                                                case 20: // tag_1
-                                                case 21: // tag_2
-                                                case 22: // tag_3
+                                                case 24: // tag_1
+                                                case 25: // tag_2
+                                                case 26: // tag_3
                                                     {
                                                         addressIndex = store.index('address');
                                                         addressRequest = addressIndex.getAll(IDBKeyRange.only(currentTrader.address));
@@ -1863,6 +2381,10 @@
                     'Twitter': trader.twitter_username || 'N/A',
                     '用户名': trader.user_name || 'N/A',
                     '利润排名': trader.profit_tag || 'N/A',
+                    '是否转入': trader.transfer_in || false,
+                    '资金来源': trader.from_name || 'N/A',
+                    '来源地址': trader.from_address || 'N/A',
+                    '是否可疑': trader.is_suspicious || false,
                     '标签1': trader.tag_1 || '',
                     '标签2': trader.tag_2 || '',
                     '标签3': trader.tag_3 || '',
@@ -1994,13 +2516,61 @@
                 document.body.appendChild(this.createTestWindow());
             };
 
+
+            const printAddressDataButton = document.createElement('button');
+            printAddressDataButton.textContent = '查看地址字段';
+            printAddressDataButton.style.cssText = `
+                padding: 8px 12px;
+                background: #2c2c2c;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                &:hover {
+                    background: #3c3c3c;
+                    border-color: #555;
+                }
+            `;
+
+            printAddressDataButton.onclick = async () => {
+                try {
+                    // 查询特定地址的数据
+                    const testAddress = 'A5CFMGAGx9TCHSqTmCfLnxHTkSaV877xhKeHMgsfhjGo';
+                    DebugLogger.log(`查询到 ${testAddressDataArray.length} 条记录：`, CONFIG.DEBUG_LEVEL.INFO);
+
+                    const testAddressDataArray = await this.db.getTraderByAddress(testAddress);//返回的是数组！！！
+
+                    if (testAddressDataArray) {
+                        DebugLogger.log('查询结果：', CONFIG.DEBUG_LEVEL.INFO);
+                        DebugLogger.log(JSON.stringify(testAddressDataArray, null, 2), CONFIG.DEBUG_LEVEL.INFO);
+
+                        // 特别关注的字段,testAddressData返回的是数组！！！，所以要用testAddressData[0]的形式来调用；
+                        DebugLogger.log(`关键字段信息：
+                            资金来源地址: ${testAddressDataArray[0].from_address || 'N/A'}
+                            来源名称: ${testAddressDataArray[0].from_name || 'N/A'}
+                            是否转入: ${testAddressDataArray[0].transfer_in || false}
+                            是否可疑: ${testAddressDataArray[0].is_suspicious || false}
+                        `, CONFIG.DEBUG_LEVEL.INFO);
+                    } else {
+                        DebugLogger.log(`未找到地址 ${testAddress} 的数据`, CONFIG.DEBUG_LEVEL.ERROR);
+                    }
+                } catch (error) {
+                    DebugLogger.log(`查询数据失败: ${error.message}`, CONFIG.DEBUG_LEVEL.ERROR);
+                    DebugLogger.log(`错误堆栈: ${error.stack}`, CONFIG.DEBUG_LEVEL.ERROR);
+                }
+            };
+
             container.appendChild(collectButton);
             container.appendChild(batchCollectButton);
             container.appendChild(debugButton);
             container.appendChild(viewDataButton);
             container.appendChild(testDataSourceButton);
+            container.appendChild(printAddressDataButton);
             document.body.appendChild(container);
-        }
+
+
+        };
 
         /**
          * 初始化列宽调整功能
@@ -2186,38 +2756,33 @@
                         try {
                             const data = JSON.parse(response.responseText);
                             resultArea.innerHTML = `<span style="color: #4CAF50;">✓ 获取成功</span>
-<strong>状态码:</strong> ${response.status}
-<strong>响应头:</strong>
-${response.responseHeaders}
-
-<strong>原始响应内容:</strong>
-${response.responseText}
-
-<strong>解析后的JSON数据:</strong>
-${JSON.stringify(data, null, 2)}`;
+                            <strong>状态码:</strong> ${response.status}
+                            <strong>响应头:</strong>
+                            ${response.responseHeaders}
+                            <strong>原始响应内容:</strong>
+                            ${response.responseText}
+                            <strong>解析后的JSON数据:</strong>
+                            ${JSON.stringify(data, null, 2)}`;
                         } catch (error) {
                             resultArea.innerHTML = `<span style="color: #f44336;">✗ 数据解析错误</span>
-<strong>错误详情:</strong> ${error.toString()}
-<strong>错误堆栈:</strong>
-${error.stack || '无堆栈信息'}
-
-<strong>状态码:</strong> ${response.status}
-<strong>响应头:</strong>
-${response.responseHeaders}
-
-<strong>原始响应内容:</strong>
-${response.responseText}`;
+                            <strong>错误详情:</strong> ${error.toString()}
+                            <strong>错误堆栈:</strong>
+                            ${error.stack || '无堆栈信息'}
+                            <strong>状态码:</strong> ${response.status}
+                            <strong>响应头:</strong>
+                            ${response.responseHeaders}
+                            <strong>原始响应内容:</strong>
+                            ${response.responseText}`;
                         }
                     },
                     onerror: (error) => {
                         resultArea.innerHTML = `<span style="color: #f44336;">✗ 请求失败</span>
-<strong>错误详情:</strong> ${error.toString()}
-<strong>错误信息:</strong> ${error.message || '未知错误'}
-<strong>错误堆栈:</strong>
-${error.stack || '无堆栈信息'}
-
-<strong>完整错误对象:</strong>
-${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
+                            <strong>错误详情:</strong> ${error.toString()}
+                            <strong>错误信息:</strong> ${error.message || '未知错误'}
+                            <strong>错误堆栈:</strong>
+                            ${error.stack || '无堆栈信息'}
+                            <strong>完整错误对象:</strong>
+                            ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     }
                 });
             };
@@ -2253,7 +2818,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
             });
         }
 
-        // 处理单个CA的数据
+        // 批量采集时调用，用于循环处理单个CA的数据
         async processTraderData(ca, data) {
             let inserted = 0;
             let updated = 0;
@@ -2302,6 +2867,21 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     }
                 }
 
+
+                /*
+                // 在创建 trader 对象之前，先打印原始数据
+                DebugLogger.log(`批量导入UI（之前）：处理第${i + 1}条数据的原始值：
+                    address: ${item.address}
+                    原始数据中的关键字段：
+                    - item: ${JSON.stringify(item)}
+                    - transfer_in: ${item.transfer_in}
+                    - from_name: ${item.native_transfer.name}
+                    - from_address: ${item.native_transfer.from_address}
+                    - is_suspicious: ${item.is_suspicious}
+                    - native_transfer: ${JSON.stringify(item.native_transfer)}
+                    `, CONFIG.DEBUG_LEVEL.WARNING);
+                */
+
                 const trader = {
                     token: tokenInfo.symbol,
                     ca: ca,
@@ -2315,9 +2895,6 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                     twitter_username: item.twitter_username || '',
                     user_name: item.name || '',
                     profit_tag: i + 1,
-                    tag_1: '',
-                    tag_2: '',
-                    tag_3: '',
                     dev: tokenInfo.dev,
                     create_time: tokenInfo.created_timestamp,
                     launch_time: tokenInfo.launch_time ? new Date(tokenInfo.launch_time).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : null,
@@ -2329,8 +2906,32 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                         : null,
                     holding_period: holdingPeriod,
                     buy_after_launch_interval: buyAfterLaunchInterval,
+
+                    //2025/02/24 新增4个字段；
+                    transfer_in: item?.transfer_in || false,
+                    from_name: item.native_transfer?.name || 'N/A',  // 注意这里是 native_transfer.name
+                    from_address: item.native_transfer?.from_address || 'N/A',  // 使用 native_transfer.from_address
+                    is_suspicious: item?.is_suspicious || false,
+
+                    tag_1: '',
+                    tag_2: '',
+                    tag_3: '',
                     update_time: this.getBeijingTime()
                 };
+
+
+                /*
+                // 在创建 trader 对象之后，打印处理后的值
+                DebugLogger.log(`批量导入UI（之后）：创建的trader对象中的关键字段：
+                    address: ${trader.address}
+                    处理后的值：
+                    - transfer_in: ${trader.transfer_in}
+                    - from_name: ${trader.native_transfer.name}
+                    - from_address: ${trader.native_transfer.from_address}
+                    - is_suspicious: ${trader.is_suspicious}
+                    `, CONFIG.DEBUG_LEVEL.INFO);
+                */
+
 
                 // 在实际写入数据库时设置update_time
                 trader.update_time = this.getBeijingTime();
@@ -2346,10 +2947,10 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                             const existingTrader = request.result;
                             if (existingTrader) {
                                 updated++;
-                                DebugLogger.log(`更新聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
+                                DebugLogger.log(`[UPDATE]: ${trader.address} (${trader.user_name || '未知用户名'}=)`, CONFIG.DEBUG_LEVEL.INFO);
                             } else {
                                 inserted++;
-                                DebugLogger.log(`新增聪明钱: ${trader.address} (${trader.user_name || 'Unknown'}, 利润排名: ${trader.profit_tag})`, CONFIG.DEBUG_LEVEL.INFO);
+                                DebugLogger.log(`[INSERT]: ${trader.address} (${trader.user_name || '未知用户名'})`, CONFIG.DEBUG_LEVEL.WARNING);
                             }
                             resolve();
                         };
@@ -3277,6 +3878,7 @@ ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`;
                                         }
 
                                         DebugLogger.log(`成功解析数据，开始处理...`, CONFIG.DEBUG_LEVEL.INFO);
+                                        //responseData.data.slice(0, 1).forEach((item, index) => {DebugLogger.log(`第${index + 1}条数据: ${JSON.stringify(item, null, 2)}`, CONFIG.DEBUG_LEVEL.INFO);});
                                         const processedCount = await this.processTraderData(ca, responseData.data);
                                         resolve(processedCount);
                                     } catch (error) {
