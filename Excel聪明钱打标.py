@@ -17,8 +17,11 @@ TAGGING_THRESHOLDS = {
 # 增加报错阀值设置
 ERROR_THRESHOLDS = {
     "MAX_PROFIT_AMOUNT_THRESHOLD": 100_000_000,  # 最大利润金额（超过显示红色错误）
+    "MIN_PROFIT_AMOUNT_THRESHOLD": 10_000,  # 最小利润金额（低于显示红色错误）
     "MAX_MULTIPLIER_THRESHOLD": 10000,  # 最大利润倍数（超过显示红色错误）
-    "MAX_TRADE_COUNT_THRESHOLD": 200  # 最大交易次数（超过显示红色错误）
+    "MAX_TRADE_COUNT_THRESHOLD": 200,  # 最大交易次数（超过显示红色错误）
+    "MIN_SOL_BALANCE": 1,  # 最小SOL余额阈值（低于显示红色错误）
+    "EXCLUDE_SUSPICIOUS": True  # 是否检查可疑地址（如果为True且地址可疑，显示红色错误）
 }
 
 # 用户可配置的排序规则
@@ -42,7 +45,7 @@ CHINESE_FIELD_MAPPING = {
 
 # 配置变量统一管理（根据实际列名调整为小写）
 CONFIG = {
-    "INPUT_FILE": "聪明钱数据_2025_2_22_16_04_42.xlsx",
+    "INPUT_FILE": "聪明钱数据_2025_2_24_20_12_28.xlsx",
     "OUTPUT_FILE": f"smartmoney_tagged_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
     "PROFIT_THRESHOLD": 3000,
     "PUMP_BUY_THRESHOLD": 600,  # 前10分钟阈值（秒）
@@ -54,9 +57,9 @@ CONFIG = {
         "ADDRESS": "聪明钱",
         "SOL_BALANCE": "sol余额",
         "PUMP_TO_BUY": "pump到买入(秒)",
-        "BUY_TIME": "买入时间",  # 用于检查买入时间
-        "SELL_TIME": "卖出时间",  # 用于检查卖出时间
-        "LAST_ACTIVE_TIME": "最后活跃时间",  # 用于获取最新交易次数
+        "BUY_TIME": "买入时间",
+        "SELL_TIME": "卖出时间",
+        "LAST_ACTIVE_TIME": "最后活跃时间",
         "HOLDING_TIME": "持有时长(分钟)",
         "BUY_AMOUNT": "买入金额",
         "SELL_AMOUNT": "卖出金额",
@@ -64,7 +67,8 @@ CONFIG = {
         "SELL_COUNT": "卖出次数",
         "REALIZED_PROFIT": "实现利润",
         "UNREALIZED_PROFIT": "未实现利润",
-        "PROFIT_RANK": "利润排名"
+        "PROFIT_RANK": "利润排名",
+        "IS_SUSPICIOUS": "是否可疑"
     }
 }
 
@@ -171,6 +175,19 @@ class SmartMoneyTagger:
             print(
                 f"警告：最后活跃时间列存在 {len(invalid_times)} 个异常值，样本: {invalid_times[last_active_col].head().tolist()}")
 
+        # 处理SOL余额列
+        sol_balance_col = self.config["COLUMNS"]["SOL_BALANCE"].lower()
+        self.df[sol_balance_col] = pd.to_numeric(self.df[sol_balance_col].replace(['N/A', ''], np.nan), errors='coerce')
+        
+        # 根据配置过滤数据
+        if ERROR_THRESHOLDS["MIN_SOL_BALANCE"] > 0:
+            self.df = self.df[self.df[sol_balance_col].fillna(0) >= ERROR_THRESHOLDS["MIN_SOL_BALANCE"]]
+            
+        # 处理可疑地址
+        if ERROR_THRESHOLDS["EXCLUDE_SUSPICIOUS"]:
+            suspicious_col = self.config["COLUMNS"]["IS_SUSPICIOUS"].lower()
+            self.df = self.df[self.df[suspicious_col].fillna(True) == False]
+
     def calculate_stats(self) -> None:
         """计算每个地址的统计数据，按地址级别汇总统计"""
         addresses = self.df[self.config["COLUMNS"]["ADDRESS"].lower()].unique()
@@ -203,7 +220,7 @@ class SmartMoneyTagger:
                 f"地址 {addr} 总利润计算: 实现利润总和 = {realized_profit.sum()}, 未实现利润总和 = {unrealized_profit.sum()}, 总利润 = {total_profit}")
 
             # 特殊处理：如果总盈利金额超过 1 亿，不打标
-            is_profit_invalid = total_profit > 100_000_000  # 1 亿
+            is_profit_invalid = total_profit > ERROR_THRESHOLDS["MAX_PROFIT_AMOUNT_THRESHOLD"]  # 1 亿
 
             # 最大倍数（统计相同地址的最大盈利倍数）
             buy_amount = addr_df[self.config["COLUMNS"]["BUY_AMOUNT"].lower()].dropna()
@@ -335,24 +352,45 @@ class SmartMoneyTagger:
             }
 
         stats = self.address_stats[addr]
+        
+        # 获取地址的SOL余额和可疑状态
+        addr_df = self.df[self.df[self.config["COLUMNS"]["ADDRESS"].lower()] == addr]
+        sol_balance_col = self.config["COLUMNS"]["SOL_BALANCE"].lower()
+        suspicious_col = self.config["COLUMNS"]["IS_SUSPICIOUS"].lower()
+        
+        latest_balance = addr_df[sol_balance_col].iloc[-1] if not addr_df.empty else 0
+        is_suspicious = addr_df[suspicious_col].iloc[-1] if not addr_df.empty else True
 
         # 检查报错阀值
         error_message = None
         if stats["total_profit"] > ERROR_THRESHOLDS["MAX_PROFIT_AMOUNT_THRESHOLD"]:
-            error_message = f"错误：{stats['total_profit']}最大利润超过阀值"
+            error_message = f"错误：{stats['total_profit']:.0f}最大利润超过阀值"
+        elif stats["total_profit"] < ERROR_THRESHOLDS["MIN_PROFIT_AMOUNT_THRESHOLD"]:
+            error_message = f"错误：{stats['total_profit']:.0f}最小利润低于阀值{ERROR_THRESHOLDS['MIN_PROFIT_AMOUNT_THRESHOLD']}"
         elif stats["max_multiple"] > ERROR_THRESHOLDS["MAX_MULTIPLIER_THRESHOLD"]:
             error_message = f"错误：{stats['max_multiple']}最大倍数超过阀值"
         elif stats["latest_trade_count"] > ERROR_THRESHOLDS["MAX_TRADE_COUNT_THRESHOLD"]:
             error_message = f"错误：{stats['latest_trade_count']}最大交易次数超过阀值"
+        elif pd.notna(latest_balance) and latest_balance < ERROR_THRESHOLDS["MIN_SOL_BALANCE"]:
+            error_message = f"错误：SOL余额{latest_balance:.0f}低于阀值{ERROR_THRESHOLDS['MIN_SOL_BALANCE']}"
+        elif ERROR_THRESHOLDS["EXCLUDE_SUSPICIOUS"] and is_suspicious:
+            error_message = "错误：可疑地址"
 
-        # 如果总盈利超过 1 亿，或达到报错阀值，不打标
+        # 如果总盈利超过阈值，或达到报错阀值，不打标
         if stats["is_profit_invalid"] or error_message:
             if not error_message:
-                tag = ""  # 空标签（总盈利超过 1 亿）
+                tag = ""  # 空标签（总盈利超过阈值）
                 stats_str = (f"利润:{stats['total_profit']:.0f},盈利金额错误!")
             else:
                 tag = error_message  # 显示红色错误信息
-                stats_str = (f"利润:{stats['total_profit']:.0f},{error_message}")
+                if "最小利润低于阀值" in error_message:
+                    stats_str = (f"利润:{stats['total_profit']:.0f},最小利润错误(低于{ERROR_THRESHOLDS['MIN_PROFIT_AMOUNT_THRESHOLD']})")
+                elif "SOL余额" in error_message:
+                    stats_str = (f"利润:{stats['total_profit']:.0f},SOL余额错误(低于{ERROR_THRESHOLDS['MIN_SOL_BALANCE']})")
+                elif "可疑地址" in error_message:
+                    stats_str = (f"利润:{stats['total_profit']:.0f},地址可疑")
+                else:
+                    stats_str = (f"利润:{stats['total_profit']:.0f},{error_message}")
         else:
             # 赚钱能力（统计所有行的利润总和）
             profit = stats["total_profit"]
@@ -416,17 +454,24 @@ class SmartMoneyTagger:
                 else:
                     holding_part = f"持{int(holding / 1440)}d"
 
-            # 组合标签，优先保留关键信息并控制长度，去除“:”和逗号，使用直接拼接
+            # 组合标签，优先保留关键信息并控制长度，去除":"和逗号，使用直接拼接
             tag_parts = [part for part in [earning_part, trade_part, buy_part, holding_part] if part]
             tag = "".join(tag_parts)  # 取消逗号，使用直接拼接
+
+            # 添加SOL余额信息
+            if pd.notna(latest_balance) and latest_balance > 0:
+                balance_str = f"余{int(latest_balance)}"
+                tag = f"{tag}{balance_str}" if tag else balance_str
+
             if len(tag) > self.config["TAG_MAX_LENGTH"]:
                 tag = f"{earning_part}{trade_part}"[:self.config["TAG_MAX_LENGTH"]]
 
-            # 统计结果（增加地址出现次数）
+            # 统计结果（增加地址出现次数和SOL余额）
             occurrence_count = stats["occurrence_count"]
+            latest_balance = addr_df[sol_balance_col].iloc[-1] if not addr_df.empty else 0
             stats_str = (f"利润:{profit:.0f},倍数:{stats['max_multiple']}x,前10:{stats['top_10_count']},"
-                         f"交:{latest_trade_count}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
-                         f"出现次数:{occurrence_count}")
+                        f"交:{latest_trade_count}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
+                        f"出现次数:{occurrence_count},SOL余额:{int(latest_balance) if pd.notna(latest_balance) else 'N/A'}")
 
         return tag, stats_str
 
