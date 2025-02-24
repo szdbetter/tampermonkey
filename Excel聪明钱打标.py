@@ -361,18 +361,24 @@ class SmartMoneyTagger:
         latest_balance = addr_df[sol_balance_col].iloc[-1] if not addr_df.empty else 0
         is_suspicious = addr_df[suspicious_col].iloc[-1] if not addr_df.empty else True
 
+        # 添加数字格式化函数
+        def format_number(num):
+            if pd.isna(num):
+                return "N/A"
+            return f"{int(num):,}"
+
         # 检查报错阀值
         error_message = None
         if stats["total_profit"] > ERROR_THRESHOLDS["MAX_PROFIT_AMOUNT_THRESHOLD"]:
-            error_message = f"错误：{stats['total_profit']:.0f}最大利润超过阀值"
+            error_message = f"错误：{format_number(stats['total_profit'])}最大利润超过阀值{format_number(ERROR_THRESHOLDS['MAX_PROFIT_AMOUNT_THRESHOLD'])}"
         elif stats["total_profit"] < ERROR_THRESHOLDS["MIN_PROFIT_AMOUNT_THRESHOLD"]:
-            error_message = f"错误：{stats['total_profit']:.0f}最小利润低于阀值{ERROR_THRESHOLDS['MIN_PROFIT_AMOUNT_THRESHOLD']}"
+            error_message = f"错误：{format_number(stats['total_profit'])}最小利润低于阀值{format_number(ERROR_THRESHOLDS['MIN_PROFIT_AMOUNT_THRESHOLD'])}"
         elif stats["max_multiple"] > ERROR_THRESHOLDS["MAX_MULTIPLIER_THRESHOLD"]:
-            error_message = f"错误：{stats['max_multiple']}最大倍数超过阀值"
+            error_message = f"错误：{format_number(stats['max_multiple'])}最大倍数超过阀值{format_number(ERROR_THRESHOLDS['MAX_MULTIPLIER_THRESHOLD'])}"
         elif stats["latest_trade_count"] > ERROR_THRESHOLDS["MAX_TRADE_COUNT_THRESHOLD"]:
-            error_message = f"错误：{stats['latest_trade_count']}最大交易次数超过阀值"
+            error_message = f"错误：{format_number(stats['latest_trade_count'])}最大交易次数超过阀值{format_number(ERROR_THRESHOLDS['MAX_TRADE_COUNT_THRESHOLD'])}"
         elif pd.notna(latest_balance) and latest_balance < ERROR_THRESHOLDS["MIN_SOL_BALANCE"]:
-            error_message = f"错误：SOL余额{latest_balance:.0f}低于阀值{ERROR_THRESHOLDS['MIN_SOL_BALANCE']}"
+            error_message = f"错误：SOL余额{format_number(latest_balance)}低于阀值{format_number(ERROR_THRESHOLDS['MIN_SOL_BALANCE'])}"
         elif ERROR_THRESHOLDS["EXCLUDE_SUSPICIOUS"] and is_suspicious:
             error_message = "错误：可疑地址"
 
@@ -380,17 +386,17 @@ class SmartMoneyTagger:
         if stats["is_profit_invalid"] or error_message:
             if not error_message:
                 tag = ""  # 空标签（总盈利超过阈值）
-                stats_str = (f"利润:{stats['total_profit']:.0f},盈利金额错误!")
+                stats_str = (f"利润:{format_number(stats['total_profit'])},盈利金额错误!")
             else:
                 tag = error_message  # 显示红色错误信息
                 if "最小利润低于阀值" in error_message:
-                    stats_str = (f"利润:{stats['total_profit']:.0f},最小利润错误(低于{ERROR_THRESHOLDS['MIN_PROFIT_AMOUNT_THRESHOLD']})")
+                    stats_str = (f"利润:{format_number(stats['total_profit'])},最小利润错误(低于{format_number(ERROR_THRESHOLDS['MIN_PROFIT_AMOUNT_THRESHOLD'])})")
                 elif "SOL余额" in error_message:
-                    stats_str = (f"利润:{stats['total_profit']:.0f},SOL余额错误(低于{ERROR_THRESHOLDS['MIN_SOL_BALANCE']})")
+                    stats_str = (f"利润:{format_number(stats['total_profit'])},SOL余额错误(低于{format_number(ERROR_THRESHOLDS['MIN_SOL_BALANCE'])})")
                 elif "可疑地址" in error_message:
-                    stats_str = (f"利润:{stats['total_profit']:.0f},地址可疑")
+                    stats_str = (f"利润:{format_number(stats['total_profit'])},地址可疑")
                 else:
-                    stats_str = (f"利润:{stats['total_profit']:.0f},{error_message}")
+                    stats_str = (f"利润:{format_number(stats['total_profit'])},{error_message}")
         else:
             # 赚钱能力（统计所有行的利润总和）
             profit = stats["total_profit"]
@@ -468,10 +474,12 @@ class SmartMoneyTagger:
 
             # 统计结果（增加地址出现次数和SOL余额）
             occurrence_count = stats["occurrence_count"]
-            latest_balance = addr_df[sol_balance_col].iloc[-1] if not addr_df.empty else 0
-            stats_str = (f"利润:{profit:.0f},倍数:{stats['max_multiple']}x,前10:{stats['top_10_count']},"
-                        f"交:{latest_trade_count}/{stats['profit_count']},买:{buy_time}m,持:{holding:.0f}m,"
-                        f"出现次数:{occurrence_count},SOL余额:{int(latest_balance) if pd.notna(latest_balance) else 'N/A'}")
+            stats_str = (f"利润:{format_number(profit)},倍数:{format_number(stats['max_multiple'])}x,"
+                        f"前10:{format_number(stats['top_10_count'])},"
+                        f"交:{format_number(latest_trade_count)}/{format_number(stats['profit_count'])},"
+                        f"买:{format_number(buy_time)}m,持:{format_number(holding)}m,"
+                        f"出现次数:{format_number(occurrence_count)},"
+                        f"SOL余额:{format_number(latest_balance)}")
 
         return tag, stats_str
 
