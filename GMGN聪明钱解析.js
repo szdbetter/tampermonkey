@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         聪明钱解析 (增强版)
+// @name         GMGN聪明钱解析
 // @namespace    http://tampermonkey.net/
 // @version      1.1
 // @description  Collect smart money addresses with enhanced debugging and interaction
@@ -25,10 +25,10 @@
     // 全局配置常量
     const CONFIG = {
         // 最低实现利润阈值（美元）
-        MIN_REALIZED_PROFIT: 3000,
+        MIN_REALIZED_PROFIT: 1000,
 
         // 最大保留交易者数量
-        MAX_TRADERS: 50,
+        MAX_TRADERS: 30,
 
         // 最后活跃天数（默认7天）
         LAST_ACTIVE_DAYS: 3,
