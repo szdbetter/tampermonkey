@@ -1,30 +1,40 @@
 import requests
 import json
+import os
 from web3 import Web3
 from datetime import datetime, timedelta
 from colorama import init, Fore, Style
 import time
 import schedule
+import pandas as pd
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 
 # 初始化 colorama（确保跨平台颜色支持）
 init()
 
-
-# 配置类，管理常量和代币精度及告警配置
+# 配置类，管理常量、代币精度、告警配置及运行时间
 class Config:
     DECIMALS = {
         'USDT': 6,  # USDT 精度为 6 位小数
+        'USDC': 6,  # USDC 精度为 6 位小数
+        'DAI': 18,  # DAI 精度为 18 位小数
         'SUSDE': 18,  # sUSDe 精度为 18 位小数
         'USDE': 18  # USDe 精度为 18 位小数
     }
-    INITIAL_USDT_AMOUNT = 1000000  # 初始 USDT 数量（100 万）
+    INITIAL_TOKEN_AMOUNT = 1000000  # 初始 Token 数量（100 万）
     APY_THRESHOLD = 0.30  # APY 阈值（30%）
-
+    BASE_TOKENS = ['USDC', 'USDT', 'DAI']  # 可配置的发送 Token 列表（用户指定）
+    TARGET_TOKEN = 'USDT'  # 最后换回的目标 Token（默认 USDT）
+    # 如果 TARGET_TOKEN 设置为 'ORIGINAL'，则最后换回原始的 Base Token，而不是固定目标 Token（如 USDT）
+    # 'ORIGINAL' 作为通配符，允许动态根据发送 Token 确定目标 Token
+    RUN_INTERVAL_MINUTES = 1  # 定时运行间隔（分钟），默认 1 分钟
 
 # 合约和地址配置
 class ContractConfig:
     USDT_ADDRESS = "0xdac17f958d2ee523a2206206994597c13d831ec7"  # USDT 合约地址
-    DAI_ADDRESS = "0x6b175474e89094c44da98b954eedeac495271d0f"  # USDT 合约地址
+    USDC_ADDRESS = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"  # USDC 合约地址
+    DAI_ADDRESS = "0x6b175474e89094c44da98b954eedeac495271d0f"  # DAI 合约地址
     SUSDE_ADDRESS = "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497"  # sUSDe 合约地址
     USDE_ADDRESS = "0x4c9edd5852cd905f086c759e8383e09bff1e68b3"  # USDe 合约地址
     RPC_URL = "https://ethereum.blockpi.network/v1/rpc/9da32353708b923d117269f74ba715598f219b25"  # BlockPi RPC 端点
@@ -43,7 +53,6 @@ class ContractConfig:
             "type": "function"
         }
     ]
-
 
 # 交互提示和日志工具
 class Logger:
@@ -67,7 +76,6 @@ class Logger:
         current_time = datetime.utcnow() + timedelta(hours=8)  # 北京时间
         time_str = current_time.strftime("%Y-%m-%d %H:%M:%S")
         print(f"{color}[结果] [{time_str}] {message}{Style.RESET_ALL}")
-
 
 # 邮件告警工具
 class EmailNotifier:
@@ -110,7 +118,6 @@ class EmailNotifier:
         Logger.print_error("所有 API Key 尝试失败，告警发送失败")
         return False
 
-
 # 报价提供者类，用于获取不同平台的报价（可扩展）
 class QuoteProvider:
     def __init__(self):
@@ -127,6 +134,8 @@ class QuoteProvider:
         # 代币名称与地址映射
         self.token_names = {
             ContractConfig.USDT_ADDRESS: "USDT",
+            ContractConfig.USDC_ADDRESS: "USDC",
+            ContractConfig.DAI_ADDRESS: "DAI",
             ContractConfig.SUSDE_ADDRESS: "sUSDe",
             ContractConfig.USDE_ADDRESS: "USDe"
         }
@@ -273,142 +282,244 @@ class BlockchainTrader:
         print(f"|{'|'.join(f'{colors[i]}{values[i]:^12}{Style.RESET_ALL}' for i in range(len(values)))}|")
         print(separator)
 
-    def calculate_apy(self, final_usdt, initial_usdt):
+    def calculate_apy(self, profit, initial_amount):
         """计算 APY 收益（百分比，保留两位小数）"""
-        profit = final_usdt - initial_usdt
         days = 7  # 冷却期为 7 天
-        apy = (profit / days) * 365 / initial_usdt
-        apy_formula = f"APY = ((({final_usdt} - {initial_usdt}) / {days}) * 365) / {initial_usdt}"
+        apy = (profit / days) * 365 / initial_amount
+        apy_formula = f"APY = ((({profit + initial_amount} - {initial_amount}) / {days}) * 365) / {initial_amount}"
         Logger.print_status(f"APY 计算公式：{apy_formula}")
         return round(apy, 4)  # 返回保留 4 位小数以便格式化，但最终输出保留 2 位
 
-    def get_token_prices(self, usdt_amount_wei, susde_amount_wei, usde_amount_wei):
-        """获取当前 sUSDe 和 USDe 的价格（基于 USDT 换算）"""
-        # 简化实现：基于 CoW Swap 报价计算价格
-        susde_price = float(susde_amount_wei) / float(usdt_amount_wei) * 10 ** (
-                    Config.DECIMALS['USDT'] - Config.DECIMALS['SUSDE']) if float(usdt_amount_wei) > 0 else 0
-        usde_price = float(usde_amount_wei) / float(usdt_amount_wei) * 10 ** (
-                    Config.DECIMALS['USDT'] - Config.DECIMALS['USDE']) if float(usdt_amount_wei) > 0 else 0
+    def get_token_prices(self, base_token_wei, susde_amount_wei, usde_amount_wei):
+        """获取当前 sUSDe 和 USDe 的价格（基于 base Token 换算）"""
+        base_token = self.quote_provider.get_token_name(base_token_wei)
+        susde_price = float(susde_amount_wei) / float(base_token_wei) * 10 ** (
+                Config.DECIMALS[base_token] - Config.DECIMALS['SUSDE']) if float(base_token_wei) > 0 else 0
+        usde_price = float(usde_amount_wei) / float(base_token_wei) * 10 ** (
+                Config.DECIMALS[base_token] - Config.DECIMALS['USDE']) if float(base_token_wei) > 0 else 0
         return susde_price, usde_price
 
     def execute_trade_flow(self):
-        """执行完整的交易流程，先计算 APY"""
-        Logger.print_status("开始执行完整交易流程...")
-        try:
-            # 步骤 1: 用 100 万 USDT 购买 sUSDe
-            initial_usdt = Config.INITIAL_USDT_AMOUNT
-            sell_amount_usdt_wei = str(int(initial_usdt * 10 ** Config.DECIMALS['USDT']))
-            usdt_to_susde_quote = self.quote_provider.fetch_quote(
-                'cow_swap', ContractConfig.USDT_ADDRESS, ContractConfig.SUSDE_ADDRESS, sell_amount_usdt_wei,
-                self.from_address, self.receiver_address
-            )
+        """执行多币种到 sUSDe 的套利查询，统一表格输出闭环结果，并保存到 Excel"""
+        Logger.print_status("开始执行多币种到 sUSDe 套利查询...")
+        results = []
+        excel_data = []
 
-            if usdt_to_susde_quote:
-                beijing_time = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-                sell_token_name = self.quote_provider.get_token_name(ContractConfig.USDT_ADDRESS)
-                buy_token_name = self.quote_provider.get_token_name(ContractConfig.SUSDE_ADDRESS)
-                sell_amount = self.format_amount(usdt_to_susde_quote["quote"]["sellAmount"], Config.DECIMALS['USDT'])
-                susde_amount_wei = usdt_to_susde_quote["quote"]["buyAmount"]
-                buy_amount = self.format_amount(susde_amount_wei, Config.DECIMALS['SUSDE'])
-                price = self.format_price(
-                    usdt_to_susde_quote["quote"]["sellAmount"], susde_amount_wei,
-                    Config.DECIMALS['USDT'], Config.DECIMALS['SUSDE']
+        for base_token in Config.BASE_TOKENS:
+            try:
+                # 获取 base Token 的地址
+                base_token_address = getattr(ContractConfig, f"{base_token.upper()}_ADDRESS")
+                initial_amount = Config.INITIAL_TOKEN_AMOUNT
+                sell_amount_wei = str(int(initial_amount * 10 ** Config.DECIMALS[base_token]))
+                base_token_name = base_token  # 确保 base_token_name 在所有步骤中定义
+
+                # 步骤 1: 用 base Token 购买 sUSDe
+                base_to_susde_quote = self.quote_provider.fetch_quote(
+                    'cow_swap', base_token_address, ContractConfig.SUSDE_ADDRESS, sell_amount_wei,
+                    self.from_address, self.receiver_address
                 )
 
-                Logger.print_result("第一步交易完成，输出结果:")
-                self.print_trade_result(1, sell_token_name, sell_amount, buy_token_name, buy_amount, beijing_time,
-                                        price)
-
-                # 步骤 2: 通过 sUSDe 合约计算 7 天后可解锁的 USDe 数量
-                Logger.print_status("正在计算 7 天后可解锁的 USDe 数量...")
-                usde_wei = self.unstake_susde_to_usde(int(susde_amount_wei))
-                if usde_wei is not None:
-                    usde_amount = self.format_amount(usde_wei, Config.DECIMALS['USDE'])
-                    Logger.print_result(f"7 天后可解锁的 USDe 数量：{usde_amount}")
-
-                    # 步骤 3: 用 USDe 换成 USDT（通过 CoW Swap）
-                    usde_to_usdt_quote = self.quote_provider.fetch_quote(
-                        'cow_swap', ContractConfig.USDE_ADDRESS, ContractConfig.USDT_ADDRESS, str(usde_wei),
-                        self.from_address, self.receiver_address
+                if base_to_susde_quote:
+                    beijing_time = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+                    sell_token_name = self.quote_provider.get_token_name(base_token_address)
+                    buy_token_name_susde = self.quote_provider.get_token_name(ContractConfig.SUSDE_ADDRESS)
+                    sell_amount = self.format_amount(base_to_susde_quote["quote"]["sellAmount"],
+                                                    Config.DECIMALS[base_token])
+                    susde_amount_wei = base_to_susde_quote["quote"]["buyAmount"]
+                    susde_amount = self.format_amount(susde_amount_wei, Config.DECIMALS['SUSDE'])
+                    price = self.format_price(
+                        base_to_susde_quote["quote"]["sellAmount"], susde_amount_wei,
+                        Config.DECIMALS[base_token], Config.DECIMALS['SUSDE']
                     )
-                    if usde_to_usdt_quote:
-                        beijing_time = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
-                        sell_token_name = self.quote_provider.get_token_name(ContractConfig.USDE_ADDRESS)
-                        buy_token_name = self.quote_provider.get_token_name(ContractConfig.USDT_ADDRESS)
-                        sell_amount = self.format_amount(usde_to_usdt_quote["quote"]["sellAmount"],
-                                                         Config.DECIMALS['USDE'])
-                        final_usdt_amount_wei = usde_to_usdt_quote["quote"]["buyAmount"]
-                        buy_amount = self.format_amount(final_usdt_amount_wei, Config.DECIMALS['USDT'])
-                        price = self.format_price(
-                            usde_to_usdt_quote["quote"]["sellAmount"], final_usdt_amount_wei,
-                            Config.DECIMALS['USDE'], Config.DECIMALS['USDT']
+
+                    Logger.print_result(f"第一步交易完成（{sell_token_name} -> sUSDe），输出结果:")
+                    self.print_trade_result(1, sell_token_name, sell_amount, buy_token_name_susde, susde_amount,
+                                            beijing_time, price)
+
+                    # 步骤 2: 通过 sUSDe 合约计算 7 天后可解锁的 USDe 数量
+                    Logger.print_status(f"正在计算 {base_token_name} 7 天后可解锁的 USDe 数量...")
+                    usde_wei = self.unstake_susde_to_usde(int(susde_amount_wei))
+                    if usde_wei is not None:
+                        usde_amount = self.format_amount(usde_wei, Config.DECIMALS['USDE'])
+                        Logger.print_result(f"7 天后可解锁的 USDe 数量：{usde_amount}")
+
+                        # 步骤 3: 用 USDe 换回目标 Token（根据 Config.TARGET_TOKEN 配置）
+                        target_token = Config.TARGET_TOKEN if Config.TARGET_TOKEN != 'ORIGINAL' else base_token
+                        target_token_address = getattr(ContractConfig, f"{target_token.upper()}_ADDRESS")
+                        usde_to_target_quote = self.quote_provider.fetch_quote(
+                            'cow_swap', ContractConfig.USDE_ADDRESS, target_token_address, str(usde_wei),
+                            self.from_address, self.receiver_address
                         )
+                        if usde_to_target_quote:
+                            beijing_time = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
+                            sell_token_name_usde = self.quote_provider.get_token_name(ContractConfig.USDE_ADDRESS)
+                            buy_token_name_target = self.quote_provider.get_token_name(target_token_address)
+                            sell_amount_usde = self.format_amount(usde_to_target_quote["quote"]["sellAmount"],
+                                                                 Config.DECIMALS['USDE'])
+                            final_target_amount_wei = usde_to_target_quote["quote"]["buyAmount"]
+                            final_target_amount = self.format_amount(final_target_amount_wei,
+                                                                    Config.DECIMALS[target_token])
+                            price = self.format_price(
+                                usde_to_target_quote["quote"]["sellAmount"], final_target_amount_wei,
+                                Config.DECIMALS['USDE'], Config.DECIMALS[target_token]
+                            )
 
-                        Logger.print_result("第二步交易完成（USDe 换 USDT），输出结果:")
-                        self.print_trade_result(2, sell_token_name, sell_amount, buy_token_name, buy_amount,
-                                                beijing_time, price)
+                            Logger.print_result(f"第二步交易完成（USDe 换回 {buy_token_name_target}），输出结果:")
+                            self.print_trade_result(2, sell_token_name_usde, sell_amount_usde, buy_token_name_target,
+                                                    final_target_amount, beijing_time, price)
 
-                        # 步骤 4: 计算 APY 收益
-                        final_usdt = float(buy_amount.replace(",", ""))
-                        apy = self.calculate_apy(final_usdt, Config.INITIAL_USDT_AMOUNT)
-                        apy_formatted = f"{apy:.2%}"  # 保留小数点后 2 位
+                            # 步骤 4: 计算闭环结果（利润和 APY）
+                            initial_amount_float = float(sell_amount.replace(",", ""))
+                            final_amount_float = float(final_target_amount.replace(",", ""))
+                            profit = final_amount_float - initial_amount_float
+                            apy = self.calculate_apy(profit, initial_amount_float)
+                            apy_formatted = f"{apy:.2%}"
 
-                        Logger.print_status("正在计算 APY 收益...")
-                        Logger.print_status(
-                            f"APY 计算公式：APY = ((({final_usdt} - {Config.INITIAL_USDT_AMOUNT}) / 7) * 365) / {Config.INITIAL_USDT_AMOUNT}")
-                        Logger.print_result(f"APY 收益：{apy_formatted}")
+                            # 收集结果用于控制台表格和 Excel
+                            result = [
+                                base_token_name,
+                                sell_amount,
+                                buy_token_name_susde,
+                                susde_amount,
+                                buy_token_name_target,
+                                final_target_amount,
+                                f"{profit:,.2f}",
+                                apy_formatted
+                            ]
+                            results.append(result)
 
-                        # 获取当前价格（基于 CoW Swap 报价）
-                        susde_price, usde_price = self.get_token_prices(
-                            usdt_to_susde_quote["quote"]["sellAmount"],
-                            usdt_to_susde_quote["quote"]["buyAmount"],
-                            usde_to_usdt_quote["quote"]["sellAmount"]
-                        )
-
-                        # 检查 APY 是否超过阈值并发送邮件告警（避免重复推送相同 APY）
-                        if apy > Config.APY_THRESHOLD:
-                            current_apy_str = f"{apy:.2f}"  # 转换为字符串，保留 2 位小数
-                            if EmailNotifier.LAST_APY is None or float(current_apy_str) != float(
-                                    EmailNotifier.LAST_APY):
-                                susde_amount = float(buy_amount) / susde_price if susde_price > 0 else 0
-                                usdt_after_7_days = float(buy_amount.replace(",", ""))
-
-                                email_body = f"""
-                                <h2>套利机会告警</h2>
-                                <p>当前 APY 收益：{apy_formatted}</p>
-                                <p>当前 sUSDe 价格（相对于 USDT）：{susde_price:.4f} USDT/sUSDe</p>
-                                <p>当前 USDe 价格（相对于 USDT）：{usde_price:.4f} USDT/USDe</p>
-                                <p>投入 1,000,000.00 USDT 可以换到 sUSDe：{susde_amount:,.2f} sUSDe</p>
-                                <p>7 天后可换回 USDT：{usdt_after_7_days:,.2f} USDT</p>
-                                <p>时间：{beijing_time} (北京时间)</p>
-                                <p>请及时检查并采取行动！</p>
-                                """
-                                Logger.print_status("APY 超过阈值，正在发送邮件告警...")
-                                if EmailNotifier.send_alert("高 APY 套利机会告警", email_body):
-                                    EmailNotifier.LAST_APY = current_apy_str  # 更新上次发送的 APY
-                                else:
-                                    Logger.print_error("邮件告警发送失败，请检查 API Key 或网络连接")
-                            else:
-                                Logger.print_status("本次 APY 与上次邮件推送的 APY 一致，不发送重复告警")
+                            # 收集数据用于 Excel，包含 APY 值用于格式化
+                            excel_row = {
+                                "序号": len(excel_data) + 1,
+                                "时间": beijing_time,
+                                "发送Token": base_token_name,
+                                "金额": sell_amount,
+                                "目标Token": buy_token_name_susde,
+                                "金额": susde_amount,
+                                "利润": f"{profit:,.2f}",
+                                "APY": apy_formatted
+                            }
+                            excel_data.append(excel_row)
                         else:
-                            Logger.print_status(f"APY {apy_formatted} 未超过 {Config.APY_THRESHOLD:.2%} 阈值，无需告警")
+                            Logger.print_error(f"USDe 换回 {target_token} 失败，跳过此 Token")
+                            continue
                     else:
-                        Logger.print_error("USDe 换 USDT 失败，流程终止")
+                        Logger.print_error(f"{base_token_name} 的 sUSDe 解锁计算失败，跳过此 Token")
+                        continue
                 else:
-                    Logger.print_error("sUSDe 解锁计算失败，流程终止")
-            else:
-                Logger.print_error("USDT 换 sUSDe 失败，流程终止")
-        except Exception as e:
-            Logger.print_error(f"流程执行失败，总体错误：{str(e)}")
+                    Logger.print_error(f"{base_token_name} 换 sUSDe 失败，跳过此 Token")
+                    continue
+            except Exception as e:
+                Logger.print_error(f"{base_token_name} 交易流程执行失败，错误：{str(e)}")
+                continue
 
-    def get_token_prices(self, usdt_amount_wei, susde_amount_wei, usde_amount_wei):
-        """获取当前 sUSDe 和 USDe 的价格（基于 USDT 换算）"""
-        # 简化实现：基于 CoW Swap 报价计算价格
-        susde_price = float(susde_amount_wei) / float(usdt_amount_wei) * 10 ** (
-                    Config.DECIMALS['USDT'] - Config.DECIMALS['SUSDE']) if float(usdt_amount_wei) > 0 else 0
-        usde_price = float(usde_amount_wei) / float(usdt_amount_wei) * 10 ** (
-                    Config.DECIMALS['USDT'] - Config.DECIMALS['USDE']) if float(usdt_amount_wei) > 0 else 0
-        return susde_price, usde_price
+        # 统一输出所有 Token 的闭环结果（控制台）
+        if results:
+            Logger.print_result("多币种 sUSDe 套利闭环结果：")
+            table_width = 98  # 调整表格宽度以适应新列
+            separator = "+" + "-" * (table_width - 2) + "+"
+            headers = ["发送Token", "发送金额", "目标Token", "获得金额", "目标Token", "换回金额", "利润", "APY"]
+            colors = [Fore.WHITE, Fore.CYAN, Fore.GREEN, Fore.GREEN, Fore.YELLOW, Fore.YELLOW, Fore.MAGENTA, Fore.MAGENTA]
+
+            print(separator)
+            print(f"|{'|'.join(f'{colors[i]}{headers[i]:^12}{Style.RESET_ALL}' for i in range(len(headers)))}|")
+            print(separator)
+            for i, result in enumerate(results, 1):
+                print(f"|{'|'.join(f'{colors[i]}{result[i]:^12}{Style.RESET_ALL}' for i in range(len(result)))}|")
+                print(separator)
+        else:
+            Logger.print_error("无有效的套利闭环结果")
+
+        # 保存到 Excel 文件（sUSDe历史APY.xlsx）
+        self.save_to_excel(excel_data)
+
+        # 步骤 5: 计算并检查 APY 告警
+        for result in results:
+            base_token_name = result[0]
+            apy = float(result[-1].strip('%')) / 100  # 转换为小数
+            if apy > Config.APY_THRESHOLD:
+                current_apy_str = f"{apy:.2f}"  # 保留 2 位小数
+                if EmailNotifier.LAST_APY is None or float(current_apy_str) != float(EmailNotifier.LAST_APY):
+                    susde_amount = float(result[3].replace(",", ""))
+                    final_amount = float(result[5].replace(",", ""))
+                    profit = float(result[6].replace(",", ""))
+                    sell_amount_wei = str(int(Config.INITIAL_TOKEN_AMOUNT * 10 ** Config.DECIMALS[base_token_name]))
+                    susde_amount_wei = base_to_susde_quote["quote"]["buyAmount"] if base_to_susde_quote else "0"
+                    usde_amount_wei = str(usde_wei) if usde_wei else "0"
+                    target_token = Config.TARGET_TOKEN if Config.TARGET_TOKEN != 'ORIGINAL' else base_token
+                    susde_price, usde_price = self.get_token_prices(
+                        sell_amount_wei, susde_amount_wei, usde_amount_wei
+                    )
+
+                    email_body = f"""
+                    <h2>套利机会告警 - {base_token_name}</h2>
+                    <p>当前 APY 收益：{current_apy_str:.2%}</p>
+                    <p>当前 {base_token_name} -> sUSDe 价格：{susde_price:.4f} {base_token_name}/sUSDe</p>
+                    <p>当前 USDe -> {target_token} 价格：{usde_price:.4f} USDe/{target_token}</p>
+                    <p>投入 1,000,000.00 {base_token_name} 可以换到 sUSDe：{susde_amount:,.2f} sUSDe</p>
+                    <p>7 天后可换回 {target_token}：{final_amount:,.2f} {target_token}</p>
+                    <p>利润：{profit:,.2f} {target_token}</p>
+                    <p>时间：{beijing_time} (北京时间)</p>
+                    <p>请及时检查并采取行动！</p>
+                    """
+                    Logger.print_status(f"{base_token_name} 的 APY 超过阈值，正在发送邮件告警...")
+                    if EmailNotifier.send_alert(f"高 APY 套利机会告警 - {base_token_name}", email_body):
+                        EmailNotifier.LAST_APY = current_apy_str  # 更新上次发送的 APY
+                    else:
+                        Logger.print_error(f"{base_token_name} 邮件告警发送失败，请检查 API Key 或网络连接")
+                else:
+                    Logger.print_status(f"{base_token_name} 的 APY {current_apy_str:.2%} 与上次推送一致，不发送重复告警")
+            else:
+                Logger.print_status(f"{base_token_name} 的 APY {apy:.2%} 未超过 {Config.APY_THRESHOLD:.2%} 阈值，无需告警")
+
+    def save_to_excel(self, data):
+        """将结果保存到 sUSDe历史APY.xlsx 文件，新的记录追加到开头，自动调整列宽，APY > 30% 行用红色字体"""
+        file_path = "sUSDe历史APY.xlsx"
+        try:
+            # 尝试读取现有文件
+            existing_df = pd.read_excel(file_path) if os.path.exists(file_path) else pd.DataFrame()
+            # 转换为新数据
+            new_df = pd.DataFrame(data)
+            # 合并数据，新记录放在开头
+            combined_df = pd.concat([new_df, existing_df], ignore_index=True)
+            # 保存到 Excel
+            with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+                combined_df.to_excel(writer, sheet_name='Sheet1', index=False)
+                # 设置字体和样式
+                workbook = writer.book
+                worksheet = workbook['Sheet1']
+                font_default = Font(name='微软雅黑', size=15)
+                font_red = Font(name='微软雅黑', size=15, color='FF0000')  # 红色字体
+
+                # 自动调整列宽
+                for column in worksheet.columns:
+                    max_length = 0
+                    column_letter = column[0].column_letter
+                    for cell in column:
+                        try:
+                            if cell.value:
+                                max_length = max(max_length, len(str(cell.value)))
+                        except:
+                            pass
+                    worksheet.column_dimensions[column_letter].width = max_length + 2  # 留出一些额外空间
+
+                # 设置字体和 APY > 30% 的红色样式
+                for row in worksheet.rows:
+                    for cell in row:
+                        cell.font = font_default  # 默认微软雅黑 15 号
+                    # 检查 APY 列（假设 APY 在最后一列）
+                    apy_cell = row[-1]  # 最后一列是 APY
+                    try:
+                        apy_value = float(apy_cell.value.strip('%')) / 100 if isinstance(apy_cell.value, str) else apy_cell.value
+                        if apy_value > Config.APY_THRESHOLD:
+                            for cell in row:
+                                cell.font = font_red  # 整行设置为红色
+                    except (ValueError, AttributeError):
+                        continue
+
+            Logger.print_status(f"结果已保存到 {file_path}")
+        except Exception as e:
+            Logger.print_error(f"保存到 Excel 失败，错误：{str(e)}")
 
 
 # 定时运行函数
@@ -421,10 +532,10 @@ def run_trader():
 
 
 if __name__ == "__main__":
-    # 设置每 3 分钟运行一次
-    schedule.every(3).minutes.do(run_trader)
+    # 设置定时运行，例如每 Config.RUN_INTERVAL_MINUTES 分钟运行一次
+    schedule.every(Config.RUN_INTERVAL_MINUTES).minutes.do(run_trader)
 
-    Logger.print_status("系统启动，定时任务每 3 分钟运行一次...")
+    Logger.print_status("系统启动，定时任务每 {} 分钟运行一次...".format(Config.RUN_INTERVAL_MINUTES))
     try:
         while True:
             schedule.run_pending()
