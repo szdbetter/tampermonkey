@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1000" height="800" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="1000" height="800" fill="#1A1A1A"/>
+  
+  <!-- 标题 -->
+  <text x="400" y="40" font-family="Arial" font-size="24" font-weight="bold" fill="#F0B90B">系统架构图</text>
+  
+  <!-- 前端层 -->
+  <rect x="100" y="80" width="800" height="150" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  <text x="450" y="110" font-family="Arial" font-size="20" font-weight="bold" fill="#F0B90B">前端层</text>
+  
+  <!-- 前端组件 -->
+  <rect x="150" y="130" width="120" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="170" y="165" font-family="Arial" font-size="14" fill="#FFFFFF">React组件</text>
+  
+  <rect x="300" y="130" width="120" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="320" y="165" font-family="Arial" font-size="14" fill="#FFFFFF">状态管理</text>
+  <text x="335" y="185" font-family="Arial" font-size="12" fill="#AAAAAA">(Redux)</text>
+  
+  <rect x="450" y="130" width="120" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="470" y="165" font-family="Arial" font-size="14" fill="#FFFFFF">UI组件</text>
+  <text x="475" y="185" font-family="Arial" font-size="12" fill="#AAAAAA">(Ant Design)</text>
+  
+  <rect x="600" y="130" width="120" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="620" y="165" font-family="Arial" font-size="14" fill="#FFFFFF">网络请求</text>
+  <text x="635" y="185" font-family="Arial" font-size="12" fill="#AAAAAA">(Axios)</text>
+  
+  <rect x="750" y="130" width="120" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="770" y="165" font-family="Arial" font-size="14" fill="#FFFFFF">图表库</text>
+  <text x="775" y="185" font-family="Arial" font-size="12" fill="#AAAAAA">(ECharts)</text>
+  
+  <!-- 业务逻辑层 -->
+  <rect x="100" y="260" width="800" height="220" rx="10" fill="#232323" stroke="#00AA00" stroke-width="2"/>
+  <text x="430" y="290" font-family="Arial" font-size="20" font-weight="bold" fill="#00AA00">业务逻辑层</text>
+  
+  <!-- 业务逻辑组件 -->
+  <rect x="130" y="320" width="160" height="70" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="150" y="350" font-family="Arial" font-size="14" fill="#FFFFFF">策略管理服务</text>
+  <text x="150" y="370" font-family="Arial" font-size="12" fill="#AAAAAA">创建/验证/执行</text>
+  
+  <rect x="320" y="320" width="160" height="70" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="340" y="350" font-family="Arial" font-size="14" fill="#FFFFFF">数据采集服务</text>
+  <text x="340" y="370" font-family="Arial" font-size="12" fill="#AAAAAA">链上/HTTP/交易所</text>
+  
+  <rect x="510" y="320" width="160" height="70" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="530" y="350" font-family="Arial" font-size="14" fill="#FFFFFF">价格分析服务</text>
+  <text x="530" y="370" font-family="Arial" font-size="12" fill="#AAAAAA">标准化/差异计算</text>
+  
+  <rect x="700" y="320" width="160" height="70" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="740" y="350" font-family="Arial" font-size="14" fill="#FFFFFF">告警服务</text>
+  <text x="720" y="370" font-family="Arial" font-size="12" fill="#AAAAAA">邮件/Telegram通知</text>
+  
+  <!-- 区块链适配器 -->
+  <rect x="130" y="400" width="160" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="150" y="435" font-family="Arial" font-size="14" fill="#FFFFFF">以太坊适配器</text>
+  
+  <rect x="320" y="400" width="160" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="350" y="435" font-family="Arial" font-size="14" fill="#FFFFFF">BSC适配器</text>
+  
+  <rect x="510" y="400" width="160" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="540" y="435" font-family="Arial" font-size="14" fill="#FFFFFF">Base适配器</text>
+  
+  <rect x="700" y="400" width="160" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="730" y="435" font-family="Arial" font-size="14" fill="#FFFFFF">Solana适配器</text>
+  
+  <!-- 数据层 -->
+  <rect x="100" y="510" width="800" height="150" rx="10" fill="#232323" stroke="#0088FF" stroke-width="2"/>
+  <text x="450" y="540" font-family="Arial" font-size="20" font-weight="bold" fill="#0088FF">数据层</text>
+  
+  <!-- 数据存储 -->
+  <rect x="150" y="570" width="200" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="190" y="605" font-family="Arial" font-size="14" fill="#FFFFFF">NeDB数据库</text>
+  
+  <rect x="400" y="570" width="200" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="440" y="605" font-family="Arial" font-size="14" fill="#FFFFFF">配置存储</text>
+  
+  <rect x="650" y="570" width="200" height="60" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="690" y="605" font-family="Arial" font-size="14" fill="#FFFFFF">价格数据缓存</text>
+  
+  <!-- 外部系统 -->
+  <rect x="100" y="690" width="800" height="80" rx="10" fill="#232323" stroke="#FF8800" stroke-width="2"/>
+  <text x="450" y="720" font-family="Arial" font-size="20" font-weight="bold" fill="#FF8800">外部系统</text>
+  
+  <!-- 外部系统组件 -->
+  <rect x="130" y="730" width="110" height="30" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="145" y="750" font-family="Arial" font-size="12" fill="#FFFFFF">区块链RPC</text>
+  
+  <rect x="260" y="730" width="110" height="30" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="280" y="750" font-family="Arial" font-size="12" fill="#FFFFFF">HTTP API</text>
+  
+  <rect x="390" y="730" width="110" height="30" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="405" y="750" font-family="Arial" font-size="12" fill="#FFFFFF">交易所API</text>
+  
+  <rect x="520" y="730" width="110" height="30" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="540" y="750" font-family="Arial" font-size="12" fill="#FFFFFF">邮件服务</text>
+  
+  <rect x="650" y="730" width="110" height="30" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="660" y="750" font-family="Arial" font-size="12" fill="#FFFFFF">Telegram API</text>
+  
+  <rect x="780" y="730" width="110" height="30" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="800" y="750" font-family="Arial" font-size="12" fill="#FFFFFF">其他服务</text>
+  
+  <!-- 连接线 -->
+  <!-- 前端到业务逻辑 -->
+  <line x1="500" y1="230" x2="500" y2="260" stroke="#FFFFFF" stroke-width="2"/>
+  <polygon points="500,260 495,250 505,250" fill="#FFFFFF"/>
+  
+  <!-- 业务逻辑到数据层 -->
+  <line x1="500" y1="480" x2="500" y2="510" stroke="#FFFFFF" stroke-width="2"/>
+  <polygon points="500,510 495,500 505,500" fill="#FFFFFF"/>
+  
+  <!-- 数据层到外部系统 -->
+  <line x1="500" y1="660" x2="500" y2="690" stroke="#FFFFFF" stroke-width="2"/>
+  <polygon points="500,690 495,680 505,680" fill="#FFFFFF"/>
+</svg> 

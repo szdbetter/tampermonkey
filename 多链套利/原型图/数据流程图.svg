@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+    <!-- 背景 -->
+    <rect width="1200" height="800" fill="#1A1A1A"/>
+    
+    <!-- 标题 -->
+    <text x="600" y="40" text-anchor="middle" font-size="24" fill="#F0B90B">多链套利监控系统数据流程</text>
+
+    <!-- 数据采集层 -->
+    <g transform="translate(100,100)">
+        <rect x="0" y="0" width="1000" height="180" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="20" y="30" font-size="18" fill="#F0B90B">数据采集层</text>
+        
+        <!-- 通用Token采集 -->
+        <g transform="translate(50,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">通用Token采集</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">入参：URL、字段映射</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">出参：价格、数量等</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">可自定义字段名</text>
+        </g>
+
+        <!-- sUSDe采集 -->
+        <g transform="translate(300,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">sUSDe采集</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">入参：URL、字段映射</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">出参：价格、数量等</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">可自定义字段名</text>
+        </g>
+
+        <!-- 自定义采集 -->
+        <g transform="translate(550,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">自定义采集</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">入参：URL、字段映射</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">出参：自定义字段</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">支持JSON解析</text>
+        </g>
+    </g>
+
+    <!-- 数据加工层 -->
+    <g transform="translate(100,320)">
+        <rect x="0" y="0" width="1000" height="180" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="20" y="30" font-size="18" fill="#F0B90B">数据加工层</text>
+
+        <!-- 预制方法 -->
+        <g transform="translate(50,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">预制方法</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">• 加减乘除(+-*/)</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">• max/min</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">入参：数值数组</text>
+        </g>
+
+        <!-- 自定义计算 -->
+        <g transform="translate(300,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">自定义计算</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">• 组合预制方法</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">• 如：APY计算</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">配置：耗时(天)</text>
+        </g>
+    </g>
+
+    <!-- 告警触发层 -->
+    <g transform="translate(100,540)">
+        <rect x="0" y="0" width="1000" height="180" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="20" y="30" font-size="18" fill="#F0B90B">告警触发层</text>
+
+        <!-- 条件配置 -->
+        <g transform="translate(50,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">条件配置</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">• 触发字段选择</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">• 判断符(> = <)</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">• 多条件(and/or)</text>
+        </g>
+
+        <!-- 告警方式 -->
+        <g transform="translate(300,60)">
+            <rect x="0" y="0" width="200" height="100" rx="5" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+            <text x="100" y="25" text-anchor="middle" fill="#F0B90B">告警方式</text>
+            <text x="10" y="50" font-size="12" fill="#FFFFFF">• 邮件(HTML)</text>
+            <text x="10" y="70" font-size="12" fill="#FFFFFF">• Telegram</text>
+            <text x="10" y="90" font-size="12" fill="#FFFFFF">运行间隔可配置</text>
+        </g>
+    </g>
+
+    <!-- 连接箭头 -->
+    <g stroke="#F0B90B" stroke-width="2" fill="none">
+        <!-- 数据采集到数据加工 -->
+        <path d="M150,280 L150,320" marker-end="url(#arrow)"/>
+        <path d="M400,280 L400,320" marker-end="url(#arrow)"/>
+        <path d="M650,280 L650,320" marker-end="url(#arrow)"/>
+        
+        <!-- 数据加工到告警触发 -->
+        <path d="M150,500 L150,540" marker-end="url(#arrow)"/>
+        <path d="M400,500 L400,540" marker-end="url(#arrow)"/>
+    </g>
+
+    <!-- 说明文本 -->
+    <g transform="translate(800,600)">
+        <text x="0" y="0" font-size="16" fill="#F0B90B">数据流说明：</text>
+        <text x="0" y="30" font-size="12" fill="#FFFFFF">1. 数据采集层支持多源数据采集</text>
+        <text x="0" y="50" font-size="12" fill="#FFFFFF">2. 采集数据可选择性进入加工层</text>
+        <text x="0" y="70" font-size="12" fill="#FFFFFF">3. 原始数据或加工数据触发告警</text>
+        <text x="0" y="90" font-size="12" fill="#FFFFFF">4. 支持多对多数据流转关系</text>
+        <text x="0" y="110" font-size="12" fill="#FFFFFF">5. 各层配置支持动态调整</text>
+    </g>
+
+    <!-- 箭头标记定义 -->
+    <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#F0B90B"/>
+        </marker>
+    </defs>
+</svg> 

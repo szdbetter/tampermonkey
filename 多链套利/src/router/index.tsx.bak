@@ -1,0 +1,22 @@
+import React from 'react';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import MainLayout from '../components/layout/MainLayout';
+import Home from '../pages/Home';
+import StrategyList from '../pages/StrategyList';
+import StrategyEditor from '../pages/StrategyEditor';
+
+const AppRoutes: React.FC = () => {
+  return (
+    <Routes>
+      <Route path="/" element={<MainLayout />}>
+        <Route index element={<Home />} />
+        <Route path="strategies" element={<StrategyList />} />
+        <Route path="strategies/editor" element={<StrategyEditor />} />
+        <Route path="strategies/editor/:id" element={<StrategyEditor />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
+    </Routes>
+  );
+};
+
+export default AppRoutes; 

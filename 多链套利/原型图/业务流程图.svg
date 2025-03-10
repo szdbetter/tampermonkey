@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1200" height="800" xmlns="http://www.w3.org/2000/svg">
+    <!-- 背景 -->
+    <rect width="1200" height="800" fill="#1A1A1A"/>
+    
+    <!-- 标题 -->
+    <text x="600" y="40" text-anchor="middle" font-size="24" fill="#F0B90B">多链套利监控系统业务流程</text>
+
+    <!-- 流程图主体 -->
+    <g transform="translate(100,100)">
+        <!-- 用户入口 -->
+        <circle cx="50" cy="50" r="30" fill="#2A2A2A" stroke="#F0B90B" stroke-width="2"/>
+        <text x="50" y="55" text-anchor="middle" font-size="14" fill="#F0B90B">用户</text>
+
+        <!-- 第一步：基础配置 -->
+        <rect x="150" y="20" width="200" height="150" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="250" y="45" text-anchor="middle" font-size="16" fill="#F0B90B">基础配置</text>
+        <text x="170" y="70" font-size="14" fill="#FFFFFF">• 链配置</text>
+        <text x="170" y="95" font-size="14" fill="#FFFFFF">• API配置</text>
+        <text x="170" y="120" font-size="14" fill="#FFFFFF">• Token配置</text>
+        <text x="170" y="145" font-size="14" fill="#FFFFFF">• 告警配置</text>
+
+        <!-- 第二步：能力配置 -->
+        <rect x="450" y="20" width="200" height="150" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="550" y="45" text-anchor="middle" font-size="16" fill="#F0B90B">能力配置</text>
+        <text x="470" y="70" font-size="14" fill="#FFFFFF">• 数据采集能力</text>
+        <text x="470" y="95" font-size="14" fill="#FFFFFF">• 数据加工能力</text>
+        <text x="470" y="120" font-size="14" fill="#FFFFFF">• 告警触发能力</text>
+
+        <!-- 第三步：策略配置 -->
+        <rect x="750" y="20" width="200" height="150" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="850" y="45" text-anchor="middle" font-size="16" fill="#F0B90B">策略配置</text>
+        <text x="770" y="70" font-size="14" fill="#FFFFFF">• 单链监控策略</text>
+        <text x="770" y="95" font-size="14" fill="#FFFFFF">• 多链监控策略</text>
+        <text x="770" y="120" font-size="14" fill="#FFFFFF">• sUSDe APY监控策略</text>
+
+        <!-- 第四步：监控执行 -->
+        <rect x="450" y="250" width="200" height="200" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+        <text x="550" y="275" text-anchor="middle" font-size="16" fill="#F0B90B">监控执行</text>
+        <text x="470" y="300" font-size="14" fill="#FFFFFF">• 数据采集任务</text>
+        <text x="470" y="325" font-size="14" fill="#FFFFFF">• 数据处理任务</text>
+        <text x="470" y="350" font-size="14" fill="#FFFFFF">• 告警检测任务</text>
+        <text x="470" y="375" font-size="14" fill="#FFFFFF">• 实时数据展示</text>
+        <text x="470" y="400" font-size="14" fill="#FFFFFF">• 告警通知推送</text>
+
+        <!-- 连接箭头 -->
+        <g stroke="#F0B90B" stroke-width="2" fill="none">
+            <!-- 用户到基础配置 -->
+            <path d="M80,50 L150,95" marker-end="url(#arrow)"/>
+            <!-- 基础配置到能力配置 -->
+            <path d="M350,95 L450,95" marker-end="url(#arrow)"/>
+            <!-- 能力配置到策略配置 -->
+            <path d="M650,95 L750,95" marker-end="url(#arrow)"/>
+            <!-- 策略配置到监控执行 -->
+            <path d="M850,170 L850,200 L550,250" marker-end="url(#arrow)"/>
+            <!-- 监控执行到用户（反馈循环） -->
+            <path d="M450,350 L100,350 L50,80" marker-end="url(#arrow)"/>
+        </g>
+
+        <!-- 说明文本 -->
+        <g transform="translate(100,500)">
+            <text x="0" y="0" font-size="16" fill="#F0B90B">业务流程说明：</text>
+            <text x="0" y="30" font-size="14" fill="#FFFFFF">1. 用户首次进入系统需完成基础配置，包括链、API、Token和告警方式的配置</text>
+            <text x="0" y="60" font-size="14" fill="#FFFFFF">2. 基于基础配置，用户可组合配置数据采集、加工和告警触发能力</text>
+            <text x="0" y="90" font-size="14" fill="#FFFFFF">3. 将配置好的能力组合成不同的监控策略</text>
+            <text x="0" y="120" font-size="14" fill="#FFFFFF">4. 系统后台执行监控任务，实时展示数据并推送告警</text>
+            <text x="0" y="150" font-size="14" fill="#FFFFFF">5. 用户可根据监控结果随时调整配置和策略</text>
+        </g>
+    </g>
+
+    <!-- 箭头标记定义 -->
+    <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#F0B90B"/>
+        </marker>
+    </defs>
+</svg> 

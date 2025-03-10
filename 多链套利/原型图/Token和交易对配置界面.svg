@@ -1,0 +1,301 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="100%" height="100%" viewBox="0 0 1000 1650" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="1000" height="1650" fill="#1A1A1A"/>
+  
+  <!-- ==================== Token配置界面 ==================== -->
+  <!-- 标题栏 -->
+  <rect x="50" y="50" width="900" height="60" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  <text x="410" y="85" font-family="Arial" font-size="20" font-weight="bold" fill="#F0B90B">Token配置</text>
+  
+  <!-- 关闭按钮 -->
+  <rect x="900" y="60" width="40" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="915" y="85" font-family="Arial" font-size="20" fill="#FFFFFF">×</text>
+  
+  <!-- 左侧面板 - 导航 (缩小宽度) -->
+  <rect x="50" y="130" width="240" height="620" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  
+  <!-- 导航项 - Token列表 -->
+  <rect x="70" y="150" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="100" y="175" font-family="Arial" font-size="14" fill="#F0B90B">Token列表</text>
+  <text x="230" y="175" font-family="Arial" font-size="14" fill="#F0B90B">▼</text>
+  
+  <!-- Token列表子项 (添加状态指示) -->
+  <rect x="90" y="200" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="220" font-family="Arial" font-size="12" fill="#FFFFFF">BTC</text>
+  <circle cx="240" cy="215" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="240" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="260" font-family="Arial" font-size="12" fill="#FFFFFF">ETH</text>
+  <circle cx="240" cy="255" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="280" width="180" height="30" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="1"/>
+  <text x="110" y="300" font-family="Arial" font-size="12" fill="#F0B90B">USDT</text>
+  <circle cx="240" cy="295" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="320" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="340" font-family="Arial" font-size="12" fill="#FFFFFF">USDC</text>
+  <circle cx="240" cy="335" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="360" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="380" font-family="Arial" font-size="12" fill="#FFFFFF">sUSDe</text>
+  <circle cx="240" cy="375" r="8" fill="#FF0000"/>
+  
+  <!-- 导航项 - 交易对列表 -->
+  <rect x="70" y="410" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="100" y="435" font-family="Arial" font-size="14" fill="#F0B90B">交易对列表</text>
+  <text x="230" y="435" font-family="Arial" font-size="14" fill="#F0B90B">▼</text>
+  
+  <!-- 交易对列表子项 (添加状态指示) -->
+  <rect x="90" y="460" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="480" font-family="Arial" font-size="12" fill="#FFFFFF">ETH/USDT</text>
+  <circle cx="240" cy="475" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="500" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="520" font-family="Arial" font-size="12" fill="#FFFFFF">BTC/USDT</text>
+  <circle cx="240" cy="515" r="8" fill="#00FF00"/>
+  
+  <!-- 新增按钮 -->
+  <rect x="70" y="550" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="130" y="575" font-family="Arial" font-size="14" fill="#FFFFFF">新增Token</text>
+  
+  <rect x="70" y="600" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="130" y="625" font-family="Arial" font-size="14" fill="#FFFFFF">新增交易对</text>
+  
+  <!-- 右侧配置面板 (扩大宽度) -->
+  <rect x="310" y="130" width="640" height="620" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  <text x="580" y="160" font-family="Arial" font-size="16" font-weight="bold" fill="#F0B90B">Token配置详情</text>
+  
+  <!-- 基础信息 -->
+  <text x="340" y="200" font-family="Arial" font-size="14" fill="#FFFFFF">Token名称:</text>
+  <text x="430" y="200" font-family="Arial" font-size="14" fill="#FF0000">*</text>
+  <rect x="440" y="180" width="480" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="205" font-family="Arial" font-size="14" fill="#F0B90B">USDT</text>
+  
+  <!-- 链选择 -->
+  <text x="340" y="260" font-family="Arial" font-size="14" fill="#FFFFFF">链:</text>
+  <text x="370" y="260" font-family="Arial" font-size="14" fill="#FF0000">*</text>
+  <rect x="440" y="240" width="200" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="265" font-family="Arial" font-size="14" fill="#FFFFFF">以太坊</text>
+  <polygon points="620,260 630,250 630,270" fill="#FFFFFF" />
+  
+  <!-- RPC URL -->
+  <text x="340" y="320" font-family="Arial" font-size="14" fill="#FFFFFF">RPC URL:</text>
+  <text x="410" y="320" font-family="Arial" font-size="14" fill="#FF0000">*</text>
+  <rect x="440" y="300" width="480" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="325" font-family="Arial" font-size="14" fill="#AAAAAA">https://mainnet.infura.io/v3/your-api-key</text>
+  
+  <!-- 合约地址 -->
+  <text x="340" y="380" font-family="Arial" font-size="14" fill="#FFFFFF">合约地址:</text>
+  <text x="420" y="380" font-family="Arial" font-size="14" fill="#FF0000">*</text>
+  <rect x="440" y="360" width="390" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="385" font-family="Arial" font-size="14" fill="#AAAAAA">0xdAC17F958D2ee523a2206206994597C13D831ec7</text>
+  
+  <!-- 查询按钮 -->
+  <rect x="840" y="360" width="60" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="860" y="385" font-family="Arial" font-size="14" fill="#FFFFFF">查</text>
+  
+  <!-- 精度 -->
+  <text x="340" y="440" font-family="Arial" font-size="14" fill="#FFFFFF">精度:</text>
+  <rect x="440" y="420" width="200" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="445" font-family="Arial" font-size="14" fill="#FFFFFF">6</text>
+  
+  <!-- 符号 -->
+  <text x="340" y="500" font-family="Arial" font-size="14" fill="#FFFFFF">符号:</text>
+  <rect x="440" y="480" width="200" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="505" font-family="Arial" font-size="14" fill="#FFFFFF">USDT</text>
+  
+  <!-- 状态 -->
+  <text x="340" y="560" font-family="Arial" font-size="14" fill="#FFFFFF">状态:</text>
+  <rect x="440" y="540" width="200" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="565" font-family="Arial" font-size="14" fill="#00FF00">启用</text>
+  <polygon points="620,560 630,550 630,570" fill="#FFFFFF" />
+  
+  <!-- 底部按钮 -->
+  <!-- 保存按钮 -->
+  <rect x="640" y="680" width="100" height="50" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="2"/>
+  <text x="670" y="710" font-family="Arial" font-size="14" fill="#FFFFFF">保存</text>
+  
+  <!-- 删除按钮 -->
+  <rect x="760" y="680" width="100" height="50" rx="5" fill="#333333" stroke="#FF6600" stroke-width="2"/>
+  <text x="790" y="710" font-family="Arial" font-size="14" fill="#FFFFFF">删除</text>
+  
+  <!-- 提示信息 -->
+  <text x="340" y="620" font-family="Arial" font-size="12" fill="#AAAAAA">* 点击"查"按钮可自动获取Token名称、符号和精度信息</text>
+  
+  <!-- 分隔线 -->
+  <line x1="50" y1="800" x2="950" y2="800" stroke="#F0B90B" stroke-width="2" stroke-dasharray="5,5"/>
+  
+  <!-- ==================== 交易对配置界面 ==================== -->
+  <!-- 标题栏 -->
+  <rect x="50" y="850" width="900" height="60" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  <text x="410" y="885" font-family="Arial" font-size="20" font-weight="bold" fill="#F0B90B">交易对配置</text>
+  
+  <!-- 关闭按钮 -->
+  <rect x="900" y="860" width="40" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="915" y="885" font-family="Arial" font-size="20" fill="#FFFFFF">×</text>
+  
+  <!-- 左侧面板 - 导航 (缩小宽度) -->
+  <rect x="50" y="930" width="240" height="620" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  
+  <!-- 导航项 - Token列表 -->
+  <rect x="70" y="950" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="100" y="975" font-family="Arial" font-size="14" fill="#F0B90B">Token列表</text>
+  <text x="230" y="975" font-family="Arial" font-size="14" fill="#F0B90B">▼</text>
+  
+  <!-- Token列表子项 (添加状态指示) -->
+  <rect x="90" y="1000" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="1020" font-family="Arial" font-size="12" fill="#FFFFFF">BTC</text>
+  <circle cx="240" cy="1015" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="1040" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="1060" font-family="Arial" font-size="12" fill="#FFFFFF">ETH</text>
+  <circle cx="240" cy="1055" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="1080" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="1100" font-family="Arial" font-size="12" fill="#FFFFFF">USDT</text>
+  <circle cx="240" cy="1095" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="1120" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="1140" font-family="Arial" font-size="12" fill="#FFFFFF">USDC</text>
+  <circle cx="240" cy="1135" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="1160" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="1180" font-family="Arial" font-size="12" fill="#FFFFFF">sUSDe</text>
+  <circle cx="240" cy="1175" r="8" fill="#FF0000"/>
+  
+  <!-- 导航项 - 交易对列表 -->
+  <rect x="70" y="1210" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="100" y="1235" font-family="Arial" font-size="14" fill="#F0B90B">交易对列表</text>
+  <text x="230" y="1235" font-family="Arial" font-size="14" fill="#F0B90B">▼</text>
+  
+  <!-- 交易对列表子项 (添加状态指示) -->
+  <rect x="90" y="1260" width="180" height="30" rx="5" fill="#232323" stroke="#F0B90B" stroke-width="1"/>
+  <text x="110" y="1280" font-family="Arial" font-size="12" fill="#F0B90B">ETH/USDT</text>
+  <circle cx="240" cy="1275" r="8" fill="#00FF00"/>
+  
+  <rect x="90" y="1300" width="180" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="110" y="1320" font-family="Arial" font-size="12" fill="#FFFFFF">BTC/USDT</text>
+  <circle cx="240" cy="1315" r="8" fill="#00FF00"/>
+  
+  <!-- 新增按钮 -->
+  <rect x="70" y="1350" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="130" y="1375" font-family="Arial" font-size="14" fill="#FFFFFF">新增Token</text>
+  
+  <rect x="70" y="1400" width="200" height="40" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="130" y="1425" font-family="Arial" font-size="14" fill="#FFFFFF">新增交易对</text>
+  
+  <!-- 右侧配置面板 (扩大宽度) -->
+  <rect x="310" y="930" width="640" height="620" rx="10" fill="#232323" stroke="#F0B90B" stroke-width="2"/>
+  <text x="580" y="960" font-family="Arial" font-size="16" font-weight="bold" fill="#F0B90B">交易对配置详情</text>
+  
+  <!-- 基础信息 -->
+  <text x="340" y="1000" font-family="Arial" font-size="14" fill="#FFFFFF">交易对名称:</text>
+  <text x="430" y="1000" font-family="Arial" font-size="14" fill="#FF0000">*</text>
+  <rect x="440" y="980" width="480" height="40" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="460" y="1005" font-family="Arial" font-size="14" fill="#F0B90B">ETH/USDT</text>
+  
+  <!-- 多链配置 -->
+  <text x="340" y="1060" font-family="Arial" font-size="16" font-weight="bold" fill="#F0B90B">多链配置</text>
+  <text x="440" y="1060" font-family="Arial" font-size="14" fill="#FF0000">*</text>
+  
+  <!-- 添加链按钮 -->
+  <rect x="460" y="1040" width="96" height="24" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="492" y="1056" font-family="Arial" font-size="11" fill="#FFFFFF">+ 添加链</text>
+  
+  <!-- 以太坊配置 -->
+  <rect x="340" y="1080" width="580" height="80" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  
+  <!-- 链选择和生效勾选 - 一行显示，垂直居中 -->
+  <text x="360" y="1120" font-family="Arial" font-size="14" fill="#FFFFFF">链:</text>
+  <rect x="390" y="1105" width="80" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="400" y="1125" font-family="Arial" font-size="11" fill="#FFFFFF">以太坊</text>
+  <polygon points="460,1120 470,1110 470,1130" fill="#FFFFFF" />
+  
+  <!-- Token1选择 - 一行显示，垂直居中 -->
+  <text x="490" y="1120" font-family="Arial" font-size="14" fill="#FFFFFF">Token1:</text>
+  <rect x="550" y="1105" width="100" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="560" y="1125" font-family="Arial" font-size="12" fill="#FFFFFF">ETH</text>
+  <polygon points="640,1120 650,1110 650,1130" fill="#FFFFFF" />
+  
+  <!-- Token2选择 - 一行显示，垂直居中 -->
+  <text x="670" y="1120" font-family="Arial" font-size="14" fill="#FFFFFF">Token2:</text>
+  <rect x="730" y="1105" width="100" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="740" y="1125" font-family="Arial" font-size="12" fill="#FFFFFF">USDT</text>
+  <polygon points="820,1120 830,1110 830,1130" fill="#FFFFFF" />
+  
+  <!-- 存和删按钮 - 同一行，垂直居中 -->
+  <rect x="840" y="1105" width="30" height="30" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="847" y="1125" font-family="Arial" font-size="12" fill="#F0B90B">存</text>
+  
+  <rect x="880" y="1105" width="30" height="30" rx="5" fill="#333333" stroke="#FF6600" stroke-width="1"/>
+  <text x="887" y="1125" font-family="Arial" font-size="12" fill="#FF6600">删</text>
+  
+  <!-- BSC配置 -->
+  <rect x="340" y="1170" width="580" height="80" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  
+  <!-- 链选择和生效勾选 - 一行显示，垂直居中 -->
+  <text x="360" y="1210" font-family="Arial" font-size="14" fill="#FFFFFF">链:</text>
+  <rect x="390" y="1195" width="80" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="400" y="1215" font-family="Arial" font-size="11" fill="#FFFFFF">BSC</text>
+  <polygon points="460,1210 470,1200 470,1220" fill="#FFFFFF" />
+  
+  <!-- Token1选择 - 一行显示，垂直居中 -->
+  <text x="490" y="1210" font-family="Arial" font-size="14" fill="#FFFFFF">Token1:</text>
+  <rect x="550" y="1195" width="100" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="560" y="1215" font-family="Arial" font-size="12" fill="#FFFFFF">ETH</text>
+  <polygon points="640,1210 650,1200 650,1220" fill="#FFFFFF" />
+  
+  <!-- Token2选择 - 一行显示，垂直居中 -->
+  <text x="670" y="1210" font-family="Arial" font-size="14" fill="#FFFFFF">Token2:</text>
+  <rect x="730" y="1195" width="100" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="740" y="1215" font-family="Arial" font-size="12" fill="#FFFFFF">USDT</text>
+  <polygon points="820,1210 830,1200 830,1220" fill="#FFFFFF" />
+  
+  <!-- 存和删按钮 - 同一行，垂直居中 -->
+  <rect x="840" y="1195" width="30" height="30" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="847" y="1215" font-family="Arial" font-size="12" fill="#F0B90B">存</text>
+  
+  <rect x="880" y="1195" width="30" height="30" rx="5" fill="#333333" stroke="#FF6600" stroke-width="1"/>
+  <text x="887" y="1215" font-family="Arial" font-size="12" fill="#FF6600">删</text>
+  
+  <!-- Solana配置 -->
+  <rect x="340" y="1260" width="580" height="80" rx="5" fill="#333333" stroke="#FFFFFF" stroke-width="1"/>
+  
+  <!-- 链选择和生效勾选 - 一行显示，垂直居中 -->
+  <text x="360" y="1300" font-family="Arial" font-size="14" fill="#FFFFFF">链:</text>
+  <rect x="390" y="1285" width="80" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="400" y="1305" font-family="Arial" font-size="11" fill="#FFFFFF">Solana</text>
+  <polygon points="460,1300 470,1290 470,1310" fill="#FFFFFF" />
+  
+  <!-- Token1选择 - 一行显示，垂直居中 -->
+  <text x="490" y="1300" font-family="Arial" font-size="14" fill="#FFFFFF">Token1:</text>
+  <rect x="550" y="1285" width="100" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="560" y="1305" font-family="Arial" font-size="12" fill="#FFFFFF">ETH</text>
+  <polygon points="640,1300 650,1290 650,1310" fill="#FFFFFF" />
+  
+  <!-- Token2选择 - 一行显示，垂直居中 -->
+  <text x="670" y="1300" font-family="Arial" font-size="14" fill="#FFFFFF">Token2:</text>
+  <rect x="730" y="1285" width="100" height="30" rx="5" fill="#232323" stroke="#FFFFFF" stroke-width="1"/>
+  <text x="740" y="1305" font-family="Arial" font-size="12" fill="#FFFFFF">USDT</text>
+  <polygon points="820,1300 830,1290 830,1310" fill="#FFFFFF" />
+  
+  <!-- 存和删按钮 - 同一行，垂直居中 -->
+  <rect x="840" y="1285" width="30" height="30" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="1"/>
+  <text x="847" y="1305" font-family="Arial" font-size="12" fill="#F0B90B">存</text>
+  
+  <rect x="880" y="1285" width="30" height="30" rx="5" fill="#333333" stroke="#FF6600" stroke-width="1"/>
+  <text x="887" y="1305" font-family="Arial" font-size="12" fill="#FF6600">删</text>
+  
+  <!-- 底部按钮 -->
+  <!-- 保存按钮 -->
+  <rect x="640" y="1480" width="100" height="50" rx="5" fill="#333333" stroke="#F0B90B" stroke-width="2"/>
+  <text x="670" y="1510" font-family="Arial" font-size="14" fill="#FFFFFF">保存</text>
+  
+  <!-- 删除按钮 -->
+  <rect x="760" y="1480" width="100" height="50" rx="5" fill="#333333" stroke="#FF6600" stroke-width="2"/>
+  <text x="790" y="1510" font-family="Arial" font-size="14" fill="#FFFFFF">删除</text>
+  
+  <!-- 提示信息 -->
+  <text x="340" y="1400" font-family="Arial" font-size="12" fill="#AAAAAA">* 请先在Token配置中添加Token，然后在此处选择组成交易对</text>
+</svg> 
