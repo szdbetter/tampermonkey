@@ -716,8 +716,6 @@ const ApiConfig: React.FC = () => {
   // 手动添加参数相关状态
   const [newParamName, setNewParamName] = useState('');
   const [newParamType, setNewParamType] = useState('');
-  const [newParamValue, setNewParamValue] = useState('');
-  const [showAddParam, setShowAddParam] = useState(false);
   
   // 折叠状态
   const [isApiKeySectionOpen, setIsApiKeySectionOpen] = useState(false);
@@ -933,27 +931,6 @@ const ApiConfig: React.FC = () => {
       // 对于链上数据类型API，如果没有设置baseUrl，设置一个默认值
       if (!editedApi.baseUrl.trim()) {
         editedApi.baseUrl = `chain://${editedApi.chainId}/${editedApi.contractAddress}/${editedApi.methodName}`;
-      }
-      
-      // 确保方法参数被正确保存
-      if (editedApi.methodParams && editedApi.methodParams.length > 0) {
-        // 验证每个参数是否有名称和类型
-        for (const param of editedApi.methodParams) {
-          if (!param.name.trim()) {
-            setError('参数名称不能为空');
-            return;
-          }
-          if (!param.type.trim()) {
-            setError('参数类型不能为空');
-            return;
-          }
-        }
-        
-        // 确保methodParams是一个数组，而不是undefined
-        editedApi.methodParams = [...editedApi.methodParams];
-      } else if (editedApi.methodName) {
-        // 如果有方法名但没有参数，初始化为空数组
-        editedApi.methodParams = [];
       }
     }
     
@@ -1293,11 +1270,7 @@ const ApiConfig: React.FC = () => {
         // 常见的只读方法列表
         const commonViewMethods = [
           'name', 'symbol', 'decimals', 'totalSupply', 'balanceOf', 'allowance',
-          'getOwner', 'owner', 'implementation', 'getImplementation',
-          // ERC4626只读方法
-          'asset', 'totalAssets', 'convertToShares', 'convertToAssets',
-          'maxDeposit', 'previewDeposit', 'maxMint', 'previewMint',
-          'maxWithdraw', 'previewWithdraw', 'maxRedeem', 'previewRedeem'
+          'getOwner', 'owner', 'implementation', 'getImplementation'
         ];
         
         // 创建方法签名
@@ -1311,14 +1284,6 @@ const ApiConfig: React.FC = () => {
             methodSignature = `function ${editedApi.methodName}(${methodParams.map((p: any) => `${p.type} ${p.name}`).join(', ')}) view returns (uint256)`;
           } else if (editedApi.methodName === 'owner' || editedApi.methodName === 'getOwner' || editedApi.methodName === 'implementation' || editedApi.methodName === 'getImplementation') {
             methodSignature = `function ${editedApi.methodName}(${methodParams.map((p: any) => `${p.type} ${p.name}`).join(', ')}) view returns (address)`;
-          } else if (editedApi.methodName === 'asset') {
-            methodSignature = `function ${editedApi.methodName}() view returns (address)`;
-          } else if (editedApi.methodName === 'totalAssets' || editedApi.methodName === 'convertToShares' || editedApi.methodName === 'convertToAssets' || 
-                     editedApi.methodName === 'maxDeposit' || editedApi.methodName === 'previewDeposit' || 
-                     editedApi.methodName === 'maxMint' || editedApi.methodName === 'previewMint' || 
-                     editedApi.methodName === 'maxWithdraw' || editedApi.methodName === 'previewWithdraw' || 
-                     editedApi.methodName === 'maxRedeem' || editedApi.methodName === 'previewRedeem') {
-            methodSignature = `function ${editedApi.methodName}(${methodParams.map((p: any) => `${p.type} ${p.name}`).join(', ')}) view returns (uint256)`;
           } else {
             methodSignature = `function ${editedApi.methodName}(${methodParams.map((p: any) => `${p.type} ${p.name}`).join(', ')}) view returns (string)`;
           }
@@ -2115,9 +2080,6 @@ const ApiConfig: React.FC = () => {
         methodName,
         methodParams
       });
-      
-      // 重置添加参数状态
-      setShowAddParam(false);
     } catch (error) {
       console.error('处理方法选择失败:', error);
       setError('获取方法参数失败: ' + (error instanceof Error ? error.message : String(error)));
@@ -2475,24 +2437,12 @@ const ApiConfig: React.FC = () => {
                             <div style={{ display: 'flex', gap: '10px' }}>
                               <Input 
                                 value={editedApi.methodName || ''} 
-                                onChange={(e) => {
-                                  // 如果清空方法名，则清空参数数组
-                                  if (!e.target.value) {
-                                    setEditedApi({
-                                      ...editedApi,
-                                      methodName: '',
-                                      methodParams: undefined
-                                    });
-                                  } else {
-                                    // 只更新方法名，不自动创建参数数组
-                                    setEditedApi({
-                                      ...editedApi,
-                                      methodName: e.target.value
-                                    });
-                                  }
-                                  // 重置添加参数状态
-                                  setShowAddParam(false);
-                                }}
+                                onChange={(e) => setEditedApi({
+                                  ...editedApi,
+                                  methodName: e.target.value,
+                                  // 为手动输入的方法创建一个空的参数数组，而不是清除参数
+                                  methodParams: e.target.value ? (editedApi.methodParams || []) : undefined
+                                })}
                                 placeholder="输入方法名称或从右侧选择"
                                 style={{ flex: 3 }}
                               />
@@ -2551,144 +2501,99 @@ const ApiConfig: React.FC = () => {
                       )}
                       {editedApi.methodName && (
                         <FormSection>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <SectionTitle>方法参数</SectionTitle>
-                            <Button 
-                              variant="primary" 
-                              onClick={() => {
-                                // 显示添加参数的行
-                                setShowAddParam(true);
-                              }}
-                              style={{ padding: '2px 10px', fontSize: '14px' }}
-                            >
-                              + 添加参数
-                            </Button>
-                          </div>
-                          
+                          <SectionTitle>方法参数</SectionTitle>
                           {/* 显示现有参数 */}
                           {(editedApi.methodParams || []).map((param, index) => (
-                            <FormRow key={index} style={{ alignItems: 'center' }}>
-                              <div style={{ flex: 1, display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                <div style={{ width: '25%' }}>
-                                  <strong>{param.name}</strong> <small>({param.type})</small>
-                                </div>
-                                <div style={{ flex: 1 }}>
-                                  <Input 
-                                    value={param.value || ''} 
-                                    onChange={(e) => handleParamValueChange(index, e.target.value)}
-                                    placeholder={`请输入${param.type}类型的值`}
-                                  />
-                                </div>
-                                <Button 
-                                  variant="danger" 
-                                  onClick={() => {
-                                    const updatedParams = [...(editedApi.methodParams || [])];
-                                    updatedParams.splice(index, 1);
-                                    setEditedApi({
-                                      ...editedApi,
-                                      methodParams: updatedParams
-                                    });
-                                  }}
-                                  style={{ padding: '2px 8px', fontSize: '12px' }}
-                                >
-                                  删除
-                                </Button>
-                              </div>
+                            <FormRow key={index}>
+                              <FormGroup style={{ flex: 1 }}>
+                                <Label>{param.name} ({param.type})<span className="required">*</span></Label>
+                                <Input 
+                                  value={param.value || ''} 
+                                  onChange={(e) => handleParamValueChange(index, e.target.value)}
+                                  placeholder={`请输入${param.type}类型的值`}
+                                />
+                                <small>支持变量格式：(变量名)</small>
+                              </FormGroup>
+                              <Button 
+                                variant="danger" 
+                                onClick={() => {
+                                  const updatedParams = [...(editedApi.methodParams || [])];
+                                  updatedParams.splice(index, 1);
+                                  setEditedApi({
+                                    ...editedApi,
+                                    methodParams: updatedParams
+                                  });
+                                }}
+                                style={{ marginLeft: '10px', padding: '0 10px', alignSelf: 'center' }}
+                              >
+                                删除
+                              </Button>
                             </FormRow>
                           ))}
                           
-                          {/* 添加新参数的行 */}
-                          {showAddParam && (
-                            <FormRow style={{ marginTop: '10px', alignItems: 'center' }}>
-                              <div style={{ flex: 1, display: 'flex', gap: '10px', alignItems: 'center' }}>
-                                <div style={{ width: '25%', display: 'flex', gap: '5px' }}>
-                                  <Input 
-                                    value={newParamName} 
-                                    onChange={(e) => setNewParamName(e.target.value)}
-                                    placeholder="参数名称"
-                                    style={{ flex: 1 }}
-                                  />
-                                </div>
-                                <div style={{ width: '25%' }}>
-                                  <Select
-                                    value={newParamType}
-                                    onChange={(e) => setNewParamType(e.target.value)}
-                                    style={{ width: '100%' }}
-                                  >
-                                    <option value="">选择类型</option>
-                                    <option value="uint256">uint256</option>
-                                    <option value="address">address</option>
-                                    <option value="bool">bool</option>
-                                    <option value="string">string</option>
-                                    <option value="bytes">bytes</option>
-                                    <option value="uint8">uint8</option>
-                                    <option value="uint128">uint128</option>
-                                    <option value="int256">int256</option>
-                                  </Select>
-                                </div>
-                                <div style={{ flex: 1, display: 'flex', gap: '5px' }}>
-                                  <Input 
-                                    value={newParamValue} 
-                                    onChange={(e) => setNewParamValue(e.target.value)}
-                                    placeholder="参数值"
-                                    style={{ flex: 1 }}
-                                  />
-                                  <Button 
-                                    variant="primary" 
-                                    onClick={() => {
-                                      if (!newParamName || !newParamType) {
-                                        setError('请输入参数名称和类型');
-                                        return;
-                                      }
-                                      
-                                      const updatedParams = [...(editedApi.methodParams || [])];
-                                      updatedParams.push({
-                                        name: newParamName,
-                                        type: newParamType,
-                                        value: newParamValue
-                                      });
-                                      
-                                      setEditedApi({
-                                        ...editedApi,
-                                        methodParams: updatedParams
-                                      });
-                                      
-                                      // 清空输入
-                                      setNewParamName('');
-                                      setNewParamType('');
-                                      setNewParamValue('');
-                                      setShowAddParam(false);
-                                    }}
-                                    disabled={!newParamName || !newParamType}
-                                  >
-                                    确定
-                                  </Button>
-                                  <Button 
-                                    variant="secondary" 
-                                    onClick={() => {
-                                      setNewParamName('');
-                                      setNewParamType('');
-                                      setNewParamValue('');
-                                      setShowAddParam(false);
-                                    }}
-                                  >
-                                    取消
-                                  </Button>
-                                </div>
-                              </div>
-                            </FormRow>
-                          )}
-                          
-                          <div style={{ marginTop: '5px' }}>
-                            <small>支持变量格式：(变量名)</small>
-                          </div>
+                          {/* 添加新参数的表单 */}
+                          <FormRow style={{ marginTop: '15px', borderTop: '1px dashed #ccc', paddingTop: '15px' }}>
+                            <FormGroup style={{ flex: 1 }}>
+                              <Label>参数名称</Label>
+                              <Input 
+                                value={newParamName} 
+                                onChange={(e) => setNewParamName(e.target.value)}
+                                placeholder="输入参数名称"
+                              />
+                            </FormGroup>
+                            <FormGroup style={{ flex: 1, marginLeft: '10px' }}>
+                              <Label>参数类型</Label>
+                              <Select
+                                value={newParamType}
+                                onChange={(e) => setNewParamType(e.target.value)}
+                              >
+                                <option value="">选择类型</option>
+                                <option value="uint256">uint256</option>
+                                <option value="address">address</option>
+                                <option value="bool">bool</option>
+                                <option value="string">string</option>
+                                <option value="bytes">bytes</option>
+                                <option value="uint8">uint8</option>
+                                <option value="uint128">uint128</option>
+                                <option value="int256">int256</option>
+                              </Select>
+                            </FormGroup>
+                            <Button 
+                              variant="primary" 
+                              onClick={() => {
+                                if (!newParamName || !newParamType) {
+                                  setError('请输入参数名称和类型');
+                                  return;
+                                }
+                                
+                                const updatedParams = [...(editedApi.methodParams || [])];
+                                updatedParams.push({
+                                  name: newParamName,
+                                  type: newParamType,
+                                  value: ''
+                                });
+                                
+                                setEditedApi({
+                                  ...editedApi,
+                                  methodParams: updatedParams
+                                });
+                                
+                                // 清空输入
+                                setNewParamName('');
+                                setNewParamType('');
+                              }}
+                              style={{ marginLeft: '10px', alignSelf: 'flex-end', marginBottom: '10px' }}
+                              disabled={!newParamName || !newParamType}
+                            >
+                              添加参数
+                            </Button>
+                          </FormRow>
                         </FormSection>
                       )}
                     </>
                   )}
                   
                   {/* API密钥/Secret（可折叠） */}
-                  {(editedApi.apiType === 'HTTP' || !editedApi.apiType) && (
                   <CollapsibleSection>
                     <CollapsibleHeader onClick={() => setIsApiKeySectionOpen(!isApiKeySectionOpen)}>
                       <CollapsibleTitle>API密钥/Secret（可选）</CollapsibleTitle>
@@ -2718,7 +2623,6 @@ const ApiConfig: React.FC = () => {
                       </FormRow>
                     </CollapsibleContent>
                   </CollapsibleSection>
-                  )}
                   
                   {/* 关联交易所（可折叠） */}
                   {(editedApi.apiType === 'HTTP' || !editedApi.apiType) && (
@@ -2763,7 +2667,6 @@ const ApiConfig: React.FC = () => {
                 </FormSection>
                 
                 {/* 字段映射（可折叠） */}
-                {(editedApi.apiType === 'HTTP' || !editedApi.apiType) && (
                 <CollapsibleSection>
                   <CollapsibleHeader onClick={() => setIsFieldMappingSectionOpen(!isFieldMappingSectionOpen)}>
                     <CollapsibleTitle>字段映射（可选）</CollapsibleTitle>
@@ -2802,7 +2705,6 @@ const ApiConfig: React.FC = () => {
                     <Button onClick={handleAddFieldMapping}>+ 添加字段映射</Button>
                   </CollapsibleContent>
                 </CollapsibleSection>
-                )}
                 
                 {/* 变量输入区域 */}
                 {detectedVariables.length > 0 && (

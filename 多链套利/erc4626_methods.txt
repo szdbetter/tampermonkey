@@ -1,0 +1,1 @@
+const commonViewMethods = ['name', 'symbol', 'decimals', 'totalSupply', 'balanceOf', 'allowance', 'getOwner', 'owner', 'implementation', 'getImplementation', 'asset', 'totalAssets', 'convertToShares', 'convertToAssets', 'maxDeposit', 'previewDeposit', 'maxMint', 'previewMint', 'maxWithdraw', 'previewWithdraw', 'maxRedeem', 'previewRedeem'];

@@ -1,0 +1,3 @@
+  // 手动添加参数相关状态
+  const [newParamName, setNewParamName] = useState(\"\");
+  const [newParamType, setNewParamType] = useState(\"\");

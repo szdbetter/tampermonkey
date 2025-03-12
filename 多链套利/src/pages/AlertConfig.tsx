@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { alertConfigAccess, AlertConfigModel } from '../services/database';
 
+// 代理服务器URL
+const PROXY_URL = '';  // 清空代理URL，直接使用原始URL
+
 // 样式组件
 const PageContainer = styled.div`
   margin-bottom: 30px;
@@ -362,6 +365,18 @@ const EmptyMessage = styled.div`
 // 预设告警配置
 const PRESET_ALERTS = [
   {
+    name: "RESEND.com邮件告警",
+    type: "email" as const,
+    config: {
+      recipients: ["8044372@gmail.com"],
+      apiKeys: [
+        "re_JfpnpbUQ_DgLDbN5x5EAmwFWGbsZ6wqaQ",
+        "re_VsrXhwK4_ESLjHdS1JmSCsLcZYStfMbe3"
+      ]
+    },
+    conditions: []
+  },
+  {
     name: "价格波动告警",
     type: "email" as const,
     config: {
@@ -402,6 +417,8 @@ const AlertConfig: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [newRecipient, setNewRecipient] = useState('');
   const [newApiKey, setNewApiKey] = useState('');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; logs: string[] } | null>(null);
   
   // 加载数据
   useEffect(() => {
@@ -530,6 +547,7 @@ const AlertConfig: React.FC = () => {
         }
       }
     }
+    // 注意：触发条件是可选的，没有触发条件也可以保存
     
     // 验证告警配置
     if (editedAlert.type === 'email') {
@@ -763,17 +781,225 @@ const AlertConfig: React.FC = () => {
   
   // 删除API Key
   const handleRemoveApiKey = (apiKey: string) => {
+    if (editedAlert && editedAlert.config.apiKeys) {
+      const updatedApiKeys = editedAlert.config.apiKeys.filter(key => key !== apiKey);
+      
+      setEditedAlert({
+        ...editedAlert,
+        config: {
+          ...editedAlert.config,
+          apiKeys: updatedApiKeys
+        }
+      });
+    }
+  };
+  
+  // 更新配置字段
+  const handleConfigChange = (field: string, value: any) => {
     if (!editedAlert) return;
-    
-    const apiKeys = (editedAlert.config.apiKeys || []).filter(key => key !== apiKey);
     
     setEditedAlert({
       ...editedAlert,
       config: {
         ...editedAlert.config,
-        apiKeys
+        [field]: value
       }
     });
+  };
+  
+  // 测试告警
+  const handleTestAlert = async () => {
+    if (!selectedAlert) return;
+    
+    setIsTesting(true);
+    setTestResult(null);
+    setError(null);
+    
+    const logs: string[] = [];
+    logs.push(`开始测试告警: ${selectedAlert.name}`);
+    logs.push(`告警类型: ${getAlertTypeDisplayName(selectedAlert.type)}`);
+    
+    try {
+      // 根据告警类型执行不同的测试
+      if (selectedAlert.type === 'email') {
+        logs.push(`准备发送测试邮件...`);
+        
+        // 检查是否有接收人
+        if (!selectedAlert.config.recipients || selectedAlert.config.recipients.length === 0) {
+          throw new Error('没有配置接收人邮箱');
+        }
+        logs.push(`接收人: ${selectedAlert.config.recipients.join(', ')}`);
+        
+        // 检查是否有API Key
+        if (!selectedAlert.config.apiKeys || selectedAlert.config.apiKeys.length === 0) {
+          throw new Error('没有配置API Key');
+        }
+        
+        // 构建请求
+        const recipient = selectedAlert.config.recipients[0];
+        logs.push(`发送测试邮件到: ${recipient}`);
+        
+        // 构建请求体
+        const requestBody = {
+          to: recipient,
+          subject: `测试告警: ${selectedAlert.name}`,
+          html: `
+            <h1>这是一封测试邮件</h1>
+            <p>告警名称: ${selectedAlert.name}</p>
+            <p>发送时间: ${new Date().toLocaleString()}</p>
+            <p>这是一封自动发送的测试邮件，用于验证告警配置是否正确。</p>
+          `
+        };
+        
+        logs.push(`准备发送请求到服务器...`);
+        
+        try {
+          // 调用服务器端API
+          const response = await fetch('http://localhost:3001/api/send-email', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+          });
+          
+          const result = await response.json();
+          logs.push(`服务器响应: ${JSON.stringify(result)}`);
+          
+          if (result.success) {
+            logs.push(`邮件发送成功!`);
+            setTestResult({
+              success: true,
+              message: '测试邮件已成功发送!',
+              logs
+            });
+          } else {
+            throw new Error(result.error || '邮件发送失败');
+          }
+        } catch (error: any) {
+          logs.push(`发送请求失败: ${error.message}`);
+          logs.push(`请确保服务器已启动并运行在 http://localhost:3001`);
+          throw error;
+        }
+      } else if (selectedAlert.type === 'telegram') {
+        logs.push(`准备发送Telegram消息...`);
+        
+        // 检查是否有API Key
+        const apiKey = selectedAlert.config.apiKey;
+        if (!apiKey) {
+          throw new Error('没有配置Telegram Bot API Key');
+        }
+        
+        // 检查是否有Chat ID
+        const chatId = selectedAlert.config.chatId || '';
+        if (!chatId) {
+          throw new Error('没有配置Telegram Chat ID');
+        }
+        
+        // 构建消息内容
+        const message = `
+测试告警: ${selectedAlert.name}
+发送时间: ${new Date().toLocaleString()}
+这是一条自动发送的测试消息，用于验证告警配置是否正确。
+        `;
+        
+        logs.push(`准备发送请求到服务器...`);
+        
+        try {
+          // 调用服务器端API
+          const response = await fetch('http://localhost:3001/api/send-telegram', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              apiKey,
+              chatId,
+              message
+            })
+          });
+          
+          const result = await response.json();
+          logs.push(`服务器响应: ${JSON.stringify(result)}`);
+          
+          if (result.success) {
+            logs.push(`Telegram消息发送成功!`);
+            setTestResult({
+              success: true,
+              message: 'Telegram消息已成功发送!',
+              logs
+            });
+          } else {
+            throw new Error(result.error || 'Telegram消息发送失败');
+          }
+        } catch (error: any) {
+          logs.push(`发送请求失败: ${error.message}`);
+          logs.push(`请确保服务器已启动并运行在 http://localhost:3001`);
+          throw error;
+        }
+      } else if (selectedAlert.type === 'webhook') {
+        logs.push(`准备发送Webhook请求...`);
+        
+        // 检查是否有URL
+        if (!selectedAlert.config.url) {
+          throw new Error('没有配置Webhook URL');
+        }
+        
+        const url = selectedAlert.config.url;
+        logs.push(`发送请求到: ${url}`);
+        
+        const payload = {
+          alertName: selectedAlert.name,
+          timestamp: new Date().toISOString(),
+          message: '这是一个测试告警',
+          isTest: true
+        };
+        
+        logs.push(`请求负载: ${JSON.stringify(payload)}`);
+        logs.push(`准备发送请求到服务器...`);
+        
+        try {
+          // 调用服务器端API
+          const response = await fetch('http://localhost:3001/api/send-webhook', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              url,
+              payload
+            })
+          });
+          
+          const result = await response.json();
+          logs.push(`服务器响应: ${JSON.stringify(result)}`);
+          
+          if (result.success) {
+            logs.push(`Webhook请求发送成功!`);
+            setTestResult({
+              success: true,
+              message: 'Webhook请求已成功发送!',
+              logs
+            });
+          } else {
+            throw new Error(result.error || 'Webhook请求发送失败');
+          }
+        } catch (error: any) {
+          logs.push(`发送请求失败: ${error.message}`);
+          logs.push(`请确保服务器已启动并运行在 http://localhost:3001`);
+          throw error;
+        }
+      }
+    } catch (err) {
+      console.error('测试告警失败:', err);
+      setTestResult({
+        success: false,
+        message: `测试失败: ${err instanceof Error ? err.message : String(err)}`,
+        logs
+      });
+    } finally {
+      setIsTesting(false);
+    }
   };
   
   // 获取告警类型显示名称
@@ -806,79 +1032,247 @@ const AlertConfig: React.FC = () => {
     switch (editedAlert.type) {
       case 'email':
         return (
-          <>
-            <Label>接收人邮箱<span className="required">*</span></Label>
-            <div>
-              {(editedAlert.config.recipients || []).map((recipient, index) => (
-                <RecipientTag key={index}>
-                  <span>{recipient}</span>
-                  <button onClick={() => handleRemoveRecipient(recipient)}>×</button>
-                </RecipientTag>
-              ))}
-            </div>
-            <RecipientInput>
-              <Input 
-                type="email"
-                value={newRecipient}
-                onChange={(e) => setNewRecipient(e.target.value)}
-                placeholder="输入邮箱地址"
-              />
-              <Button onClick={handleAddRecipient}>添加</Button>
-            </RecipientInput>
-            
-            <div style={{ marginTop: '20px' }}>
-              <Label>API Keys (可选，用于轮流发送邮件)</Label>
+          <div>
+            <FormGroup>
+              <Label>接收人邮箱</Label>
               <div>
-                {(editedAlert.config.apiKeys || []).map((apiKey, index) => (
-                  <RecipientTag key={index}>
-                    <span>{apiKey.substring(0, 8)}...{apiKey.substring(apiKey.length - 8)}</span>
-                    <button onClick={() => handleRemoveApiKey(apiKey)}>×</button>
-                  </RecipientTag>
+                {(editedAlert.config.recipients || []).map((recipient, index) => (
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                    <div style={{ flex: 1 }}>{recipient}</div>
+                    <Button onClick={() => handleRemoveRecipient(recipient)}>×</Button>
+                  </div>
                 ))}
               </div>
-              <RecipientInput>
-                <Input 
+              <div style={{ display: 'flex', marginTop: '10px' }}>
+                <Input
+                  type="email"
+                  value={newRecipient}
+                  onChange={(e) => setNewRecipient(e.target.value)}
+                  placeholder="输入邮箱地址"
+                  style={{ marginRight: '10px' }}
+                />
+                <Button onClick={handleAddRecipient}>+</Button>
+              </div>
+            </FormGroup>
+            <FormGroup>
+              <Label>API Keys (Resend.com)</Label>
+              <div>
+                {(editedAlert.config.apiKeys || []).map((apiKey, index) => (
+                  <div key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: '5px' }}>
+                    <div style={{ flex: 1 }}>{apiKey.substring(0, 8)}...{apiKey.substring(apiKey.length - 8)}</div>
+                    <Button onClick={() => handleRemoveApiKey(apiKey)}>×</Button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', marginTop: '10px' }}>
+                <Input
+                  type="text"
                   value={newApiKey}
                   onChange={(e) => setNewApiKey(e.target.value)}
-                  placeholder="输入API Key (如Resend.com的密钥)"
+                  placeholder="输入API Key"
+                  style={{ marginRight: '10px' }}
                 />
-                <Button onClick={handleAddApiKey}>添加</Button>
-              </RecipientInput>
-              <small>提示: 添加多个API Key可以轮流使用，避免单个Key的发送限制</small>
+                <Button onClick={handleAddApiKey}>+</Button>
+              </div>
+            </FormGroup>
+            
+            {/* 添加测试按钮和测试结果显示区域 */}
+            <div style={{ marginTop: '20px' }}>
+              <Button 
+                onClick={handleTestAlert} 
+                disabled={isTesting}
+                style={{ 
+                  marginRight: '10px',
+                  whiteSpace: 'nowrap',
+                  minWidth: '100px'
+                }}
+              >
+                {isTesting ? '测试中...' : '测试告警'}
+              </Button>
+              
+              {testResult && (
+                <div style={{ 
+                  marginTop: '10px', 
+                  padding: '10px', 
+                  border: `1px solid ${testResult?.success ? '#4caf50' : '#f44336'}`,
+                  borderRadius: '4px',
+                  backgroundColor: testResult?.success ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)'
+                }}>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    color: testResult?.success ? '#4caf50' : '#f44336',
+                    marginBottom: '10px'
+                  }}>
+                    {testResult?.message}
+                  </div>
+                  
+                  <div style={{ 
+                    maxHeight: '200px', 
+                    overflowY: 'auto', 
+                    backgroundColor: '#1a1a1a',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    color: '#e6e6e6',
+                    lineHeight: '1.5'
+                  }}>
+                    {testResult?.logs.map((log, index) => (
+                      <div key={index} style={{ 
+                        marginBottom: '5px'
+                      }}>
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          </>
+          </div>
         );
-      
       case 'telegram':
         return (
-          <>
-            <Label>Telegram Bot API Key<span className="required">*</span></Label>
-            <Input 
-              value={editedAlert.config.apiKey || ''}
-              onChange={(e) => setEditedAlert({
-                ...editedAlert,
-                config: { ...editedAlert.config, apiKey: e.target.value }
-              })}
-              placeholder="输入Telegram Bot API Key"
-            />
-          </>
+          <div>
+            <FormGroup>
+              <Label>Bot API Key</Label>
+              <Input
+                type="text"
+                value={editedAlert.config.apiKey || ''}
+                onChange={(e) => handleConfigChange('apiKey', e.target.value)}
+                placeholder="输入Telegram Bot API Key"
+              />
+            </FormGroup>
+            <FormGroup>
+              <Label>聊天ID</Label>
+              <Input
+                type="text"
+                value={editedAlert.config.chatId || ''}
+                onChange={(e) => handleConfigChange('chatId', e.target.value)}
+                placeholder="输入聊天ID"
+              />
+            </FormGroup>
+            
+            {/* 添加测试按钮和测试结果显示区域 */}
+            <div style={{ marginTop: '20px' }}>
+              <Button 
+                onClick={handleTestAlert} 
+                disabled={isTesting}
+                style={{ 
+                  marginRight: '10px',
+                  whiteSpace: 'nowrap',
+                  minWidth: '100px'
+                }}
+              >
+                {isTesting ? '测试中...' : '测试告警'}
+              </Button>
+              
+              {testResult && (
+                <div style={{ 
+                  marginTop: '10px', 
+                  padding: '10px', 
+                  border: `1px solid ${testResult?.success ? '#4caf50' : '#f44336'}`,
+                  borderRadius: '4px',
+                  backgroundColor: testResult?.success ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)'
+                }}>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    color: testResult?.success ? '#4caf50' : '#f44336',
+                    marginBottom: '10px'
+                  }}>
+                    {testResult?.message}
+                  </div>
+                  
+                  <div style={{ 
+                    maxHeight: '200px', 
+                    overflowY: 'auto', 
+                    backgroundColor: '#1a1a1a',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    color: '#e6e6e6',
+                    lineHeight: '1.5'
+                  }}>
+                    {testResult?.logs.map((log, index) => (
+                      <div key={index} style={{ 
+                        marginBottom: '5px'
+                      }}>
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         );
-      
       case 'webhook':
         return (
-          <>
-            <Label>Webhook URL<span className="required">*</span></Label>
-            <Input 
-              value={editedAlert.config.url || ''}
-              onChange={(e) => setEditedAlert({
-                ...editedAlert,
-                config: { ...editedAlert.config, url: e.target.value }
-              })}
-              placeholder="输入Webhook URL"
-            />
-          </>
+          <div>
+            <FormGroup>
+              <Label>Webhook URL</Label>
+              <Input
+                type="text"
+                value={editedAlert.config.url || ''}
+                onChange={(e) => handleConfigChange('url', e.target.value)}
+                placeholder="输入Webhook URL"
+              />
+            </FormGroup>
+            
+            {/* 添加测试按钮和测试结果显示区域 */}
+            <div style={{ marginTop: '20px' }}>
+              <Button 
+                onClick={handleTestAlert} 
+                disabled={isTesting}
+                style={{ 
+                  marginRight: '10px',
+                  whiteSpace: 'nowrap',
+                  minWidth: '100px'
+                }}
+              >
+                {isTesting ? '测试中...' : '测试告警'}
+              </Button>
+              
+              {testResult && (
+                <div style={{ 
+                  marginTop: '10px', 
+                  padding: '10px', 
+                  border: `1px solid ${testResult?.success ? '#4caf50' : '#f44336'}`,
+                  borderRadius: '4px',
+                  backgroundColor: testResult?.success ? 'rgba(76, 175, 80, 0.1)' : 'rgba(244, 67, 54, 0.1)'
+                }}>
+                  <div style={{ 
+                    fontWeight: 'bold', 
+                    color: testResult?.success ? '#4caf50' : '#f44336',
+                    marginBottom: '10px'
+                  }}>
+                    {testResult?.message}
+                  </div>
+                  
+                  <div style={{ 
+                    maxHeight: '200px', 
+                    overflowY: 'auto', 
+                    backgroundColor: '#1a1a1a',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    color: '#e6e6e6',
+                    lineHeight: '1.5'
+                  }}>
+                    {testResult?.logs.map((log, index) => (
+                      <div key={index} style={{ 
+                        marginBottom: '5px'
+                      }}>
+                        {log}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         );
-      
       default:
         return null;
     }
