@@ -164,27 +164,68 @@ const SubMenuIcon = styled.span<{ isOpen: boolean }>`
   transition: transform 0.3s ease;
 `;
 
+// 修改 SubMenuItems 组件样式
 const SubMenuItems = styled.div<{ isOpen: boolean }>`
-  max-height: ${props => props.isOpen ? '200px' : '0px'};
+  max-height: ${props => props.isOpen ? '500px' : '0'};
   overflow: hidden;
   transition: max-height 0.3s ease;
 `;
 
+// API 子菜单组件
+const ApiSubMenu: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const location = useLocation();
+  
+  // 检查当前路径是否匹配 API 相关路径
+  React.useEffect(() => {
+    if (location.pathname.includes('/config/exchanges') || 
+        location.pathname.includes('/config/apis')) {
+      setIsOpen(true);
+    }
+  }, [location.pathname]);
+  
+  return (
+    <div>
+      <SubMenuTitle 
+        isOpen={isOpen} 
+        onClick={() => setIsOpen(!isOpen)}
+      >
+        API管理
+        <SubMenuIcon isOpen={isOpen}>›</SubMenuIcon>
+      </SubMenuTitle>
+      {isOpen && (
+        <div style={{ paddingLeft: '15px' }}>
+          <NavItem to="/config/exchanges">
+            交易所配置
+          </NavItem>
+          <NavItem to="/config/apis">
+            API配置
+          </NavItem>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const Sidebar: React.FC = () => {
   const location = useLocation();
   const [activeStrategy, setActiveStrategy] = useState('1');
-  const [apiMenuOpen, setApiMenuOpen] = useState(true);
+  const [basicConfigOpen, setBasicConfigOpen] = useState(false);
+  const [capabilityConfigOpen, setCapabilityConfigOpen] = useState(true);
   
-  // 检查当前路径是否匹配API相关路径
-  const isApiRelatedPath = location.pathname.includes('/config/exchanges') || 
-                          location.pathname.includes('/config/apis');
+  // 检查当前路径是否匹配相关路径
+  const isBasicConfigPath = location.pathname.includes('/config/') &&
+                           !location.pathname.includes('/capability/');
+  const isCapabilityPath = location.pathname.includes('/capability/');
   
-  // 如果当前路径是API相关的，确保API菜单是打开的
+  // 根据当前路径自动展开相应的菜单
   React.useEffect(() => {
-    if (isApiRelatedPath && !apiMenuOpen) {
-      setApiMenuOpen(true);
+    if (isBasicConfigPath && !basicConfigOpen) {
+      setBasicConfigOpen(true);
+    } else if (isCapabilityPath && !capabilityConfigOpen) {
+      setCapabilityConfigOpen(true);
     }
-  }, [location.pathname, isApiRelatedPath, apiMenuOpen]);
+  }, [location.pathname, isBasicConfigPath, basicConfigOpen, isCapabilityPath, capabilityConfigOpen]);
   
   return (
     <SidebarContainer>
@@ -207,42 +248,55 @@ const Sidebar: React.FC = () => {
         </NavList>
       </SidebarSection>
       
+      {/* 基础配置模块 */}
       <SidebarSection>
-        <SectionTitle>基础配置</SectionTitle>
-        <NavList>
-          <NavItem to="/config/chains">
-            链配置
-          </NavItem>
-          <NavItem to="/config/tokens">
-            Token配置
-          </NavItem>
-          <NavItem to="/config/pairs">
-            交易对配置
-          </NavItem>
-          
-          {/* API管理子菜单 */}
-          <div>
-            <SubMenuTitle 
-              isOpen={apiMenuOpen} 
-              onClick={() => setApiMenuOpen(!apiMenuOpen)}
-            >
-              API管理
-              <SubMenuIcon isOpen={apiMenuOpen}>›</SubMenuIcon>
-            </SubMenuTitle>
-            <SubMenuItems isOpen={apiMenuOpen}>
-              <NavItem to="/config/exchanges">
-                交易所配置
-              </NavItem>
-              <NavItem to="/config/apis">
-                API配置
-              </NavItem>
-            </SubMenuItems>
-          </div>
-          
-          <NavItem to="/config/alerts">
-            告警配置
-          </NavItem>
-        </NavList>
+        <SubMenuTitle 
+          isOpen={basicConfigOpen} 
+          onClick={() => setBasicConfigOpen(!basicConfigOpen)}
+        >
+          基础配置
+          <SubMenuIcon isOpen={basicConfigOpen}>›</SubMenuIcon>
+        </SubMenuTitle>
+        {basicConfigOpen && (
+          <NavList>
+            <NavItem to="/config/chains">
+              链配置
+            </NavItem>
+            <NavItem to="/config/tokens">
+              Token配置
+            </NavItem>
+            <NavItem to="/config/pairs">
+              交易对配置
+            </NavItem>
+            
+            {/* API管理子菜单 */}
+            <ApiSubMenu />
+          </NavList>
+        )}
+      </SidebarSection>
+      
+      {/* 能力配置模块 */}
+      <SidebarSection>
+        <SubMenuTitle 
+          isOpen={capabilityConfigOpen} 
+          onClick={() => setCapabilityConfigOpen(!capabilityConfigOpen)}
+        >
+          能力配置
+          <SubMenuIcon isOpen={capabilityConfigOpen}>›</SubMenuIcon>
+        </SubMenuTitle>
+        {capabilityConfigOpen && (
+          <NavList>
+            <NavItem to="/capability/data-collection">
+              数据采集能力
+            </NavItem>
+            <NavItem to="/capability/data-processing">
+              数据加工能力
+            </NavItem>
+            <NavItem to="/capability/alert">
+              告警能力
+            </NavItem>
+          </NavList>
+        )}
       </SidebarSection>
       
       <SidebarSection>
