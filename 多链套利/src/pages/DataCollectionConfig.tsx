@@ -1697,7 +1697,7 @@ const DataCollectionConfig: React.FC = () => {
                   }}>
                     {extractedValues[mapping.targetField] === null 
                       ? '未找到' 
-                      : formatNumber(extractedValues[mapping.targetField])}
+                      : formatNumber(extractedValues[mapping.targetField], mapping.targetField)}
                   </div>
                 ) : (
                   <div style={{ color: '#AAAAAA', padding: '8px 0' }}>未获取</div>
@@ -1716,18 +1716,46 @@ const DataCollectionConfig: React.FC = () => {
   };
   
   // 添加千位符格式化函数
-  const formatNumber = (value: any): string => {
+  const formatNumber = (value: any, fieldName?: string): string => {
     if (value === null || value === undefined) {
       return '';
     }
     
+    // 根据字段名称进行特殊处理
+    if (fieldName) {
+      // 如果字段名包含"hex"，保持原始格式
+      if (fieldName.toLowerCase().includes('hex')) {
+        return String(value);
+      }
+      
+      // 如果字段名包含"formatted"，保持原始格式
+      if (fieldName.toLowerCase().includes('formatted')) {
+        return String(value);
+      }
+      
+      // 如果字段名包含"decimal"，添加千位符
+      if (fieldName.toLowerCase().includes('decimal') && !isNaN(Number(value))) {
+        return Number(value).toLocaleString('zh-CN');
+      }
+    }
+    
     // 如果是数字或可以转换为数字
     if (!isNaN(Number(value))) {
-      // 转换为数字并添加千位符
+      // 如果是十六进制格式，保持原始格式
+      if (typeof value === 'string' && value.toLowerCase().startsWith('0x')) {
+        return value;
+      }
+      
+      // 如果是小数（包含小数点），保持原始格式
+      if (typeof value === 'string' && value.includes('.')) {
+        return value;
+      }
+      
+      // 其他数字添加千位符
       return Number(value).toLocaleString('zh-CN');
     }
     
-    // 如果是对象，可能需要递归处理
+    // 如果是对象，使用JSON.stringify
     if (typeof value === 'object') {
       return JSON.stringify(value);
     }
