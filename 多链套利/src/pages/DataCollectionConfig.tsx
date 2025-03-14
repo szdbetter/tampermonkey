@@ -1,609 +1,1616 @@
-import React, { useState, useEffect } from 'react';
-import type { DataCollectionConfigModel } from '../utils/database';
-import { Button, message, Descriptions, Tag, Typography, Form, Input, Select, Switch, Table, Modal } from 'antd';
+import React, { useState, useEffect, useMemo } from 'react';
 import styled from 'styled-components';
-import { Database } from '../utils/database';
+import { Database, DataCollectionConfigModel } from '../utils/database';
+import { apiConfigAccess, ApiConfigModel } from '../services/database';
+import { sendRequest, isTamperMonkeyEnvironment } from '../utils/tampermonkey';
 
-const { Title } = Typography;
-const { Option } = Select;
-const { TextArea } = Input;
+// 样式组件
+const PageContainer = styled.div`
+  margin-bottom: 30px;
+`;
+
+const PageHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const PageTitle = styled.h1`
+  margin: 0;
+  color: white;
+  font-size: 24px;
+`;
+
+const ActionButton = styled.button`
+  background-color: #F0B90B;
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  
+  &:hover {
+    background-color: #d6a50a;
+  }
+`;
+
+const ContentLayout = styled.div`
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  height: calc(100vh - 200px);
+`;
+
+const NodeList = styled.div`
+  background-color: #2A2A2A;
+  border-radius: 5px;
+  overflow: hidden;
+  height: 100%;
+`;
+
+const NodeListHeader = styled.div`
+  padding: 15px;
+  border-bottom: 1px solid #3A3A3A;
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const NodeItem = styled.div<{ selected: boolean }>`
+  padding: 12px 15px;
+  border-bottom: 1px solid #3A3A3A;
+  cursor: pointer;
+  background-color: ${props => props.selected ? '#3A3A3A' : 'transparent'};
+  
+  &:hover {
+    background-color: ${props => props.selected ? '#3A3A3A' : '#2F2F2F'};
+  }
+`;
+
+const NodeName = styled.div<{ selected?: boolean }>`
+  font-weight: ${props => props.selected ? 'bold' : 'normal'};
+`;
+
+const ApiName = styled.div`
+  font-size: 12px;
+  color: #AAAAAA;
+  margin-top: 4px;
+`;
+
+const StatusIndicator = styled.div<{ active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  min-width: 60px;
+  text-align: center;
+  white-space: nowrap;
+  background-color: ${props => props.active ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'};
+  color: ${props => props.active ? '#00FF00' : '#FF0000'};
+  
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: ${props => props.active ? '#00AA00' : '#AA0000'};
+    margin-right: 6px;
+  }
+`;
+
+const ConfigPanel = styled.div`
+  background-color: #2A2A2A;
+  border-radius: 5px;
+  padding: 20px;
+  height: 100%;
+  overflow: auto;
+`;
+
+const FormSection = styled.div`
+  margin-bottom: 20px;
+`;
+
+const SectionTitle = styled.h2`
+  color: #F0B90B;
+  font-size: 18px;
+  margin-top: 0;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #444444;
+  padding-bottom: 8px;
+`;
+
+const FormRow = styled.div`
+  display: flex;
+  margin-bottom: 15px;
+  gap: 15px;
+`;
+
+const FormGroup = styled.div<{ flex?: number; minWidth?: string }>`
+  flex: ${props => props.flex || 1};
+  min-width: ${props => props.minWidth || 'auto'};
+`;
+
+const Label = styled.label`
+  display: block;
+  margin-bottom: 8px;
+  color: #FFFFFF;
+  font-size: 14px;
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #2A2A2A;
+  color: #FFFFFF;
+  font-size: 14px;
+  
+  &:focus {
+    outline: none;
+    border-color: #F0B90B;
+  }
+`;
+
+const Select = styled.select`
+  width: 70%;
+  padding: 8px 12px;
+  background-color: #333333;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  color: #FFFFFF;
+  font-size: 14px;
+  
+  &:focus {
+    border-color: #F0B90B;
+    outline: none;
+  }
+`;
+
+const Checkbox = styled.input`
+  margin-right: 8px;
+`;
 
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 8px;
-  margin: 16px 0;
+  gap: 10px;
+  margin-top: 20px;
 `;
 
-const ResultCard = styled.div`
-  margin: 16px 0;
-  padding: 16px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+const Button = styled.button`
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
-const ConfigForm = styled(Form)`
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+const PrimaryButton = styled(Button)`
+  background-color: #F0B90B;
+  color: #000000;
+  
+  &:hover:not(:disabled) {
+    background-color: #d6a50a;
+  }
 `;
 
-const TableCard = styled.div`
-  margin: 24px 0;
-  padding: 24px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+const SecondaryButton = styled(Button)`
+  background-color: #444444;
+  color: #FFFFFF;
+  
+  &:hover:not(:disabled) {
+    background-color: #555555;
+  }
 `;
 
-let db: Database | null = null;
+const DangerButton = styled(Button)`
+  background-color: #AA0000;
+  color: #FFFFFF;
+  
+  &:hover:not(:disabled) {
+    background-color: #CC0000;
+  }
+`;
 
-const initDatabase = async () => {
-  return new Promise<void>((resolve, reject) => {
-    const request = window.indexedDB.open('arbitrage', 1);
-    
-    request.onerror = () => {
-      reject(request.error);
-    };
-    
-    request.onsuccess = () => {
-      db = new Database(request.result);
-      resolve();
-    };
-    
-    request.onupgradeneeded = (event) => {
-      const database = (event.target as IDBOpenDBRequest).result;
-      if (!database.objectStoreNames.contains('data_collection_configs')) {
-        database.createObjectStore('data_collection_configs', { keyPath: 'NO' });
-      }
-    };
-  });
-};
+const FieldMappingTable = styled.table`
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+`;
 
-const DataCollectionConfigPage: React.FC = () => {
-  const [form] = Form.useForm();
-  const [currentConfig, setCurrentConfig] = useState<DataCollectionConfigModel>({
+const TableHeader = styled.th`
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #444444;
+  color: #AAAAAA;
+`;
+
+const TableCell = styled.td`
+  padding: 8px;
+  border-bottom: 1px solid #444444;
+`;
+
+const TestResultPanel = styled.div`
+  margin-top: 20px;
+  background-color: #333333;
+  border-radius: 5px;
+  padding: 15px;
+`;
+
+const TestResultTitle = styled.h3`
+  color: #F0B90B;
+  margin-top: 0;
+  margin-bottom: 10px;
+`;
+
+const TestResultContent = styled.pre`
+  color: #FFFFFF;
+  font-family: monospace;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow: auto;
+  background-color: #222222;
+  padding: 10px;
+  border-radius: 4px;
+`;
+
+// 新增 API 响应结果面板
+const ApiResponsePanel = styled.div`
+  margin-top: 20px;
+  background-color: #333333;
+  border-radius: 5px;
+  padding: 15px;
+`;
+
+const ApiResponseTitle = styled.h3`
+  color: #F0B90B;
+  margin-top: 0;
+  margin-bottom: 10px;
+`;
+
+const ApiResponseContent = styled.pre`
+  color: #FFFFFF;
+  font-family: monospace;
+  white-space: pre-wrap;
+  max-height: 300px;
+  overflow: auto;
+  background-color: #222222;
+  padding: 10px;
+  border-radius: 4px;
+`;
+
+// 添加消息提示组件
+const MessageBox = styled.div<{ type: 'success' | 'error' | 'info' }>`
+  margin-top: 15px;
+  padding: 10px 15px;
+  border-radius: 4px;
+  background-color: ${props => 
+    props.type === 'success' ? 'rgba(0, 255, 0, 0.1)' : 
+    props.type === 'error' ? 'rgba(255, 0, 0, 0.1)' : 
+    'rgba(0, 0, 255, 0.1)'
+  };
+  color: ${props => 
+    props.type === 'success' ? '#00FF00' : 
+    props.type === 'error' ? '#FF6666' : 
+    '#66CCFF'
+  };
+  border-left: 4px solid ${props => 
+    props.type === 'success' ? '#00AA00' : 
+    props.type === 'error' ? '#AA0000' : 
+    '#0088CC'
+  };
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 0;
+  margin-left: 10px;
+`;
+
+// 数据采集节点模型
+interface DataCollectionNodeModel {
+  id?: number;
+  name: string;
+  active: boolean;
+  apiId: number;
+  apiName?: string;
+  fieldMappings: FieldMapping[];
+}
+
+// 字段映射模型
+interface FieldMapping {
+  id?: number;
+  sourceField: string;  // JSON路径
+  targetField: string;  // 自定义字段名
+  description: string;  // 显示名称
+}
+
+// 测试结果模型
+interface TestResult {
+  success: boolean;
+  message: string;
+  logs: string[];
+  data?: any;
+}
+
+// 新增 API 响应数据模型
+interface ApiResponse {
+  success: boolean;
+  message: string;
+  data?: any;
+  error?: string;
+  logs?: string[];
+  extractedFields?: Record<string, any>;
+}
+
+// 修改为使用自定义属性存储
+interface CustomConfig {
+  apiId: number;
+  fieldMappings: FieldMapping[];
+}
+
+const DataCollectionConfig: React.FC = () => {
+  // 状态
+  const [nodes, setNodes] = useState<DataCollectionNodeModel[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
+  const [currentNode, setCurrentNode] = useState<DataCollectionNodeModel>({
     name: '',
-    type: 'contract',
     active: true,
-    config: {
-      chainId: '',
-      contractAddress: '',
-      methodName: '',
-      abi: '',
-      contractParams: []
-    }
+    apiId: 0,
+    fieldMappings: []
   });
-  const [configList, setConfigList] = useState<DataCollectionConfigModel[]>([]);
+  const [apis, setApis] = useState<ApiConfigModel[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [testResult, setTestResult] = useState<TestResult | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [testResult, setTestResult] = useState<{
-    success: boolean;
-    message: string;
-    data?: any;
-    error?: string;
-  } | null>(null);
-
-  // 加载配置列表
-  const loadConfigList = async () => {
-    if (!db) {
-      message.error('数据库未初始化');
-      return;
-    }
-
+  const [isLoadingApi, setIsLoadingApi] = useState(false);
+  const [apiResponse, setApiResponse] = useState<ApiResponse | null>(null);
+  const [db, setDb] = useState<Database | null>(null);
+  const [message, setMessage] = useState<{text: string, type: 'success' | 'error' | 'info'} | null>(null);
+  
+  // 初始化数据库
+  useEffect(() => {
+    const request = indexedDB.open('MultiChainArbitrage', 1);
+    
+    request.onupgradeneeded = (event) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      
+      // 创建数据采集配置存储
+      if (!db.objectStoreNames.contains('data_collection_configs')) {
+        db.createObjectStore('data_collection_configs', { keyPath: 'NO', autoIncrement: true });
+      }
+    };
+    
+    request.onsuccess = (event) => {
+      const database = new Database((event.target as IDBOpenDBRequest).result);
+      setDb(database);
+      loadData(database);
+    };
+    
+    request.onerror = (event) => {
+      console.error('数据库打开失败:', (event.target as IDBOpenDBRequest).error);
+      setMessage({
+        text: '数据库初始化失败，请检查浏览器设置或刷新页面重试',
+        type: 'error'
+      });
+    };
+  }, []);
+  
+  // 加载数据
+  const loadData = async (database: Database | null = db) => {
+    if (!database) return;
+    
     setIsLoading(true);
     try {
-      const configs = await db.getAllDataCollectionConfigs();
-      setConfigList(configs);
-    } catch (error: any) {
-      console.error('加载配置列表失败:', error);
-      message.error(error.message || '加载配置列表失败');
+      // 加载 API 配置
+      const apiConfigs = await apiConfigAccess.getAll();
+      setApis(apiConfigs);
+      
+      // 加载数据采集节点
+      const dataCollectionNodes = await database.getAllDataCollectionConfigs();
+      
+      // 转换为内部模型
+      const convertedNodes: DataCollectionNodeModel[] = dataCollectionNodes.map(node => {
+        // 尝试从 apiParams 中解析自定义配置
+        let apiId = 0;
+        let fieldMappings: FieldMapping[] = [];
+        
+        try {
+          if (node.config && node.config.apiParams && node.config.apiParams.customConfig) {
+            const customConfig = JSON.parse(node.config.apiParams.customConfig) as CustomConfig;
+            apiId = customConfig.apiId || 0;
+            fieldMappings = customConfig.fieldMappings || [];
+          }
+        } catch (error) {
+          console.error('解析自定义配置失败:', error);
+        }
+        
+        const apiConfig = apiConfigs.find(api => api.NO === apiId);
+        
+        return {
+          id: node.NO,
+          name: node.name,
+          active: node.active,
+          apiId: apiId,
+          apiName: apiConfig?.name,
+          fieldMappings: fieldMappings
+        };
+      });
+      
+      setNodes(convertedNodes);
+      
+      if (convertedNodes.length > 0 && !selectedNodeId) {
+        setSelectedNodeId(convertedNodes[0].id || null);
+        setCurrentNode(convertedNodes[0]);
+      }
+    } catch (error) {
+      console.error('加载数据失败:', error);
+      setMessage({
+        text: `加载数据失败: ${error instanceof Error ? error.message : String(error)}`,
+        type: 'error'
+      });
     } finally {
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    initDatabase()
-      .then(() => loadConfigList())
-      .catch(error => {
-        console.error('初始化数据库失败:', error);
-        message.error('初始化数据库失败');
+  
+  // 选择节点
+  const handleSelectNode = (node: DataCollectionNodeModel) => {
+    setSelectedNodeId(node.id || null);
+    setCurrentNode(node);
+    setTestResult(null);
+    setApiResponse(null);
+  };
+  
+  // 创建新节点
+  const handleCreateNode = () => {
+    const newNode: DataCollectionNodeModel = {
+      name: '新数据采集节点',
+      active: true,
+      apiId: 0, // 初始化为0，表示未选择API
+      fieldMappings: []
+    };
+    setSelectedNodeId(null);
+    setCurrentNode(newNode);
+    setTestResult(null);
+    setApiResponse(null);
+  };
+  
+  // 更新节点名称
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentNode({
+      ...currentNode,
+      name: e.target.value
+    });
+  };
+  
+  // 更新节点状态
+  const handleStatusChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentNode({
+      ...currentNode,
+      active: e.target.checked
+    });
+  };
+  
+  // 更新 API ID 并自动加载字段映射
+  const handleApiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const apiId = parseInt(e.target.value);
+    setCurrentNode({
+      ...currentNode,
+      apiId,
+      apiName: apis.find(api => api.NO === apiId)?.name,
+      fieldMappings: [] // 清空字段映射，等待从API配置中加载
+    });
+    
+    // 自动加载字段映射
+    if (apiId) {
+      loadFieldMappingsFromApiConfig(apiId);
+    }
+    
+    // 清空API响应
+    setApiResponse(null);
+  };
+  
+  // 从API配置中加载字段映射
+  const loadFieldMappingsFromApiConfig = (apiId: number) => {
+    // 获取选中的API配置
+    const selectedApi = apis.find(api => api.NO === apiId);
+    
+    if (selectedApi && selectedApi.fieldMappings && selectedApi.fieldMappings.length > 0) {
+      // 将API配置中的字段映射转换为数据采集节点的字段映射格式
+      const mappings: FieldMapping[] = selectedApi.fieldMappings.map(mapping => ({
+        sourceField: mapping.jsonPath,
+        targetField: mapping.customName,
+        description: mapping.displayName
+      }));
+      
+      setCurrentNode(prev => ({
+        ...prev,
+        fieldMappings: mappings
+      }));
+    } else {
+      // 如果API配置中没有字段映射，则尝试从已保存的节点中查找
+      const savedMappings = nodes.find(node => node.apiId === apiId)?.fieldMappings;
+      
+      if (savedMappings && savedMappings.length > 0) {
+        setCurrentNode(prev => ({
+          ...prev,
+          fieldMappings: savedMappings
+        }));
+      }
+    }
+  };
+  
+  // 获取 API 数据
+  const handleFetchApiData = async () => {
+    if (!currentNode.apiId) {
+      setMessage({
+        text: '请选择 API',
+        type: 'error'
       });
-  }, []);
-
-  // 处理表单值变化
-  const handleValuesChange = (changedValues: any, allValues: any) => {
-    const newConfig: DataCollectionConfigModel = {
-      ...currentConfig,
-      ...allValues,
-      config: {
-        ...currentConfig.config,
-        ...allValues.config
+      return;
+    }
+    
+    setIsLoadingApi(true);
+    setApiResponse(null);
+    
+    try {
+      // 获取选中的 API 配置
+      const selectedApi = apis.find(api => api.NO === currentNode.apiId);
+      
+      if (!selectedApi) {
+        throw new Error('未找到选中的 API 配置');
+      }
+      
+      // 记录API交互过程
+      const logs: string[] = [];
+      logs.push(`[${new Date().toISOString()}] 开始调用 API: ${selectedApi.name}`);
+      
+      // 构建请求参数
+      let apiUrl = selectedApi.baseUrl || '';
+      
+      // 验证 URL 格式
+      if (!apiUrl || !apiUrl.trim()) {
+        throw new Error('API URL 为空，请在 API 配置中设置有效的 baseUrl');
+      }
+      
+      try {
+        new URL(apiUrl);
+      } catch (e) {
+        throw new Error(`API URL 格式无效: ${apiUrl}`);
+      }
+      
+      let method = selectedApi.method || 'GET';
+      let headers: Record<string, string> = {};
+      let body: string | null = null;
+      
+      // 添加API密钥（如果有）
+      if (selectedApi.apiKey) {
+        headers['X-API-Key'] = selectedApi.apiKey;
+        logs.push(`[${new Date().toISOString()}] 已添加 API 密钥`);
+      }
+      
+      // 添加认证信息（如果有）
+      if (selectedApi.apiSecret) {
+        headers['Authorization'] = `Bearer ${selectedApi.apiSecret}`;
+        logs.push(`[${new Date().toISOString()}] 已添加认证信息`);
+      }
+      
+      // 处理请求体（如果是POST请求）
+      if (method === 'POST' && selectedApi.payload) {
+        body = selectedApi.payload;
+        headers['Content-Type'] = 'application/json';
+        logs.push(`[${new Date().toISOString()}] 已设置 Content-Type: application/json`);
+      }
+      
+      // 处理自定义变量
+      if (selectedApi.customVariables) {
+        logs.push(`[${new Date().toISOString()}] 处理自定义变量...`);
+        Object.entries(selectedApi.customVariables).forEach(([key, value]) => {
+          const placeholder = `{${key}}`;
+          const oldUrl = apiUrl;
+          apiUrl = apiUrl.replace(placeholder, value);
+          
+          if (oldUrl !== apiUrl) {
+            logs.push(`[${new Date().toISOString()}] 替换变量 ${placeholder} -> ${value}`);
+          }
+          
+          if (body) {
+            const oldBody = body;
+            body = body.replace(placeholder, value);
+            
+            if (oldBody !== body) {
+              logs.push(`[${new Date().toISOString()}] 在请求体中替换变量 ${placeholder} -> ${value}`);
+            }
+          }
+        });
+      }
+      
+      logs.push(`[${new Date().toISOString()}] 请求URL: ${apiUrl}`);
+      logs.push(`[${new Date().toISOString()}] 请求方法: ${method}`);
+      logs.push(`[${new Date().toISOString()}] 请求头: ${JSON.stringify(headers)}`);
+      if (body) {
+        logs.push(`[${new Date().toISOString()}] 请求体: ${body}`);
+      }
+      
+      logs.push(`[${new Date().toISOString()}] 发送请求...`);
+      logs.push(`[${new Date().toISOString()}] 注意: 如果遇到 CORS 问题，系统将自动尝试使用代理服务`);
+      
+      // 实际发送API请求
+      let responseData: any;
+      
+      try {
+        // 检查是否在 TamperMonkey 环境中
+        const isTM = isTamperMonkeyEnvironment();
+        if (isTM) {
+          logs.push(`[${new Date().toISOString()}] 检测到 TamperMonkey 环境，使用 GM_xmlhttpRequest 发送请求`);
+        } else {
+          logs.push(`[${new Date().toISOString()}] 未检测到 TamperMonkey 环境，将使用 fetch API 或代理服务`);
+        }
+        
+        // 使用工具函数发送请求
+        const startTime = Date.now();
+        responseData = await sendRequest(
+          apiUrl,
+          method as 'GET' | 'POST',
+          headers,
+          body,
+          30000 // 30秒超时
+        );
+        const endTime = Date.now();
+        
+        logs.push(`[${new Date().toISOString()}] 请求成功，耗时 ${endTime - startTime}ms`);
+        
+        // 检查响应数据
+        if (responseData === null || responseData === undefined) {
+          logs.push(`[${new Date().toISOString()}] 警告: 响应数据为空`);
+          responseData = {};
+        } else if (typeof responseData === 'string' && responseData.trim() === '') {
+          logs.push(`[${new Date().toISOString()}] 警告: 响应数据为空字符串`);
+          responseData = {};
+        }
+        
+        logs.push(`[${new Date().toISOString()}] 响应数据类型: ${typeof responseData}`);
+        logs.push(`[${new Date().toISOString()}] 响应数据: ${JSON.stringify(responseData, null, 2)}`);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logs.push(`[${new Date().toISOString()}] 请求失败: ${errorMessage}`);
+        
+        // 添加更多调试信息
+        logs.push(`[${new Date().toISOString()}] 调试信息:`);
+        logs.push(`[${new Date().toISOString()}] - 浏览器: ${navigator.userAgent}`);
+        logs.push(`[${new Date().toISOString()}] - TamperMonkey 环境: ${isTamperMonkeyEnvironment() ? '是' : '否'}`);
+        
+        // 尝试 ping 目标服务器
+        logs.push(`[${new Date().toISOString()}] 尝试检查目标服务器是否可达...`);
+        try {
+          const urlObj = new URL(apiUrl);
+          logs.push(`[${new Date().toISOString()}] 目标主机: ${urlObj.hostname}`);
+          logs.push(`[${new Date().toISOString()}] 协议: ${urlObj.protocol}`);
+          logs.push(`[${new Date().toISOString()}] 端口: ${urlObj.port || '默认'}`);
+          logs.push(`[${new Date().toISOString()}] 路径: ${urlObj.pathname}`);
+          
+          // 提供解决方案建议
+          logs.push(`[${new Date().toISOString()}] 可能的解决方案:`);
+          logs.push(`[${new Date().toISOString()}] 1. 确认 URL 是否正确: ${apiUrl}`);
+          logs.push(`[${new Date().toISOString()}] 2. 检查网络连接是否正常`);
+          logs.push(`[${new Date().toISOString()}] 3. 系统已自动尝试使用代理服务，如果仍然失败，可能是目标服务器不允许任何形式的跨域请求`);
+          logs.push(`[${new Date().toISOString()}] 4. 尝试在浏览器中直接访问该 URL 确认是否可以正常访问`);
+        } catch (e) {
+          logs.push(`[${new Date().toISOString()}] 无法解析 URL: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        
+        throw new Error(`请求失败: ${errorMessage}`);
+      }
+      
+      // 提取映射字段的值（如果有）
+      let extractedFields: Record<string, any> = {};
+      if (currentNode.fieldMappings.length > 0) {
+        logs.push(`[${new Date().toISOString()}] 开始提取映射字段...`);
+        
+        currentNode.fieldMappings.forEach(mapping => {
+          try {
+            // 从嵌套对象中获取值
+            const value = getNestedValue(responseData, mapping.sourceField);
+            extractedFields[mapping.targetField] = value;
+            
+            if (value === undefined) {
+              logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在`);
+            } else {
+              logs.push(`[${new Date().toISOString()}] 提取字段 ${mapping.sourceField} -> ${mapping.targetField}: ${JSON.stringify(value)}`);
+            }
+          } catch (error) {
+            logs.push(`[${new Date().toISOString()}] 提取字段 ${mapping.sourceField} 失败: ${error instanceof Error ? error.message : String(error)}`);
+            extractedFields[mapping.targetField] = null;
+          }
+        });
+        
+        logs.push(`[${new Date().toISOString()}] 字段提取完成`);
+      }
+      
+      logs.push(`[${new Date().toISOString()}] API调用完成`);
+      
+      // 设置API响应
+      setApiResponse({
+        success: true,
+        message: '获取数据成功',
+        data: responseData,
+        logs: logs,
+        extractedFields: Object.keys(extractedFields).length > 0 ? extractedFields : undefined
+      });
+      
+      // 如果没有字段映射，自动生成一些建议的字段映射
+      if (currentNode.fieldMappings.length === 0) {
+        // 根据API响应自动生成字段映射建议
+        const suggestedMappings = generateFieldMappingSuggestions(responseData);
+        
+        if (suggestedMappings.length > 0) {
+          logs.push(`[${new Date().toISOString()}] 自动生成了 ${suggestedMappings.length} 个字段映射建议`);
+          setCurrentNode(prev => ({
+            ...prev,
+            fieldMappings: suggestedMappings
+          }));
+        } else {
+          logs.push(`[${new Date().toISOString()}] 无法自动生成字段映射建议，请手动添加`);
+        }
+      }
+    } catch (error) {
+      console.error('获取 API 数据失败:', error);
+      
+      // 创建详细的错误日志
+      const errorLogs: string[] = [];
+      errorLogs.push(`[${new Date().toISOString()}] 错误: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // 添加更多调试信息
+      if (currentNode.apiId) {
+        const selectedApi = apis.find(api => api.NO === currentNode.apiId);
+        if (selectedApi) {
+          errorLogs.push(`[${new Date().toISOString()}] API 名称: ${selectedApi.name}`);
+          errorLogs.push(`[${new Date().toISOString()}] API URL: ${selectedApi.baseUrl || '未设置'}`);
+          errorLogs.push(`[${new Date().toISOString()}] API 方法: ${selectedApi.method || 'GET'}`);
+        }
+      }
+      
+      errorLogs.push(`[${new Date().toISOString()}] 浏览器: ${navigator.userAgent}`);
+      errorLogs.push(`[${new Date().toISOString()}] TamperMonkey 环境: ${isTamperMonkeyEnvironment() ? '是' : '否'}`);
+      
+      // 提供解决方案建议
+      errorLogs.push(`[${new Date().toISOString()}] 可能的解决方案:`);
+      errorLogs.push(`[${new Date().toISOString()}] 1. 确认 API URL 是否正确`);
+      errorLogs.push(`[${new Date().toISOString()}] 2. 检查网络连接是否正常`);
+      errorLogs.push(`[${new Date().toISOString()}] 3. 系统已自动尝试使用代理服务，如果仍然失败，可能是目标服务器不允许任何形式的跨域请求`);
+      errorLogs.push(`[${new Date().toISOString()}] 4. 尝试在浏览器中直接访问该 API URL 确认是否可以正常访问`);
+      
+      // 如果错误信息中包含 "Failed to fetch"，添加更具体的建议
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg.includes('Failed to fetch')) {
+        errorLogs.push(`[${new Date().toISOString()}] 对于 "Failed to fetch" 错误，可能的原因包括:`);
+        errorLogs.push(`[${new Date().toISOString()}] - 网络连接问题`);
+        errorLogs.push(`[${new Date().toISOString()}] - 目标服务器不可达`);
+        errorLogs.push(`[${new Date().toISOString()}] - 请求的 URL 格式不正确`);
+        errorLogs.push(`[${new Date().toISOString()}] - 浏览器安全策略阻止了请求`);
+        errorLogs.push(`[${new Date().toISOString()}] - 系统已尝试使用多种代理服务，但均失败，这可能表明目标服务器有严格的访问控制`);
+      }
+      
+      setApiResponse({
+        success: false,
+        message: '获取数据失败',
+        error: error instanceof Error ? error.message : String(error),
+        logs: errorLogs
+      });
+    } finally {
+      setIsLoadingApi(false);
+    }
+  };
+  
+  // 从嵌套对象中获取值
+  const getNestedValue = (obj: any, path: string): any => {
+    const keys = path.split('.');
+    let result = obj;
+    
+    for (const key of keys) {
+      if (result === null || result === undefined) {
+        return undefined;
+      }
+      result = result[key];
+    }
+    
+    return result;
+  };
+  
+  // 根据API响应自动生成字段映射建议
+  const generateFieldMappingSuggestions = (data: any): FieldMapping[] => {
+    const suggestions: FieldMapping[] = [];
+    const paths: string[] = [];
+    
+    // 递归查找所有叶子节点路径
+    const findPaths = (obj: any, currentPath: string = '') => {
+      if (obj === null || obj === undefined) {
+        return;
+      }
+      
+      if (typeof obj !== 'object') {
+        paths.push(currentPath);
+        return;
+      }
+      
+      for (const key in obj) {
+        const newPath = currentPath ? `${currentPath}.${key}` : key;
+        if (typeof obj[key] === 'object' && obj[key] !== null) {
+          findPaths(obj[key], newPath);
+        } else {
+          paths.push(newPath);
+        }
       }
     };
-    setCurrentConfig(newConfig);
+    
+    findPaths(data);
+    
+    // 选择一些有意义的路径作为建议
+    const interestingKeywords = ['price', 'value', 'amount', 'volume', 'change', 'percentage', 'rate', 'time', 'date', 'name', 'symbol', 'id'];
+    
+    paths.forEach(path => {
+      // 检查路径是否包含感兴趣的关键词
+      const isInteresting = interestingKeywords.some(keyword => 
+        path.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      if (isInteresting) {
+        // 从路径中提取最后一部分作为目标字段名
+        const parts = path.split('.');
+        const lastPart = parts[parts.length - 1];
+        
+        suggestions.push({
+          sourceField: path,
+          targetField: lastPart,
+          description: `${lastPart} 数据`
+        });
+      }
+    });
+    
+    // 限制建议数量
+    return suggestions.slice(0, 5);
   };
-
-  // 编辑配置
-  const handleEdit = (record: DataCollectionConfigModel) => {
-    setCurrentConfig(record);
-    form.setFieldsValue({
-      ...record,
-      config: record.config
+  
+  // 添加字段映射
+  const handleAddFieldMapping = () => {
+    const newMapping: FieldMapping = {
+      sourceField: '',
+      targetField: '',
+      description: ''
+    };
+    
+    setCurrentNode({
+      ...currentNode,
+      fieldMappings: [...currentNode.fieldMappings, newMapping]
     });
   };
-
-  // 保存配置
-  const handleSave = async () => {
-    try {
-      const values = await form.validateFields();
-      if (!values.name) {
-        message.error('请输入配置名称');
-        return;
-      }
-
-      if (!db) {
-        message.error('数据库未初始化');
-        return;
-      }
-
-      setIsSaving(true);
-      try {
-        const configToSave = {
-          ...currentConfig,
-          ...values
-        };
-
-        if (currentConfig.NO) {
-          await db.updateDataCollectionConfig(configToSave);
-          message.success('配置已更新');
-        } else {
-          await db.addDataCollectionConfig(configToSave);
-          message.success('配置已保存');
-        }
-        loadConfigList();
-      } catch (error: any) {
-        console.error('保存配置失败:', error);
-        message.error(error.message || '保存配置失败');
-      } finally {
-        setIsSaving(false);
-      }
-    } catch (error) {
-      // 表单验证失败
-    }
+  
+  // 更新字段映射
+  const handleFieldMappingChange = (index: number, field: keyof FieldMapping, value: string) => {
+    const updatedMappings = [...currentNode.fieldMappings];
+    updatedMappings[index] = {
+      ...updatedMappings[index],
+      [field]: value
+    };
+    
+    setCurrentNode({
+      ...currentNode,
+      fieldMappings: updatedMappings
+    });
   };
-
-  // 删除配置
-  const handleDelete = async () => {
-    if (!currentConfig.NO) {
+  
+  // 删除字段映射
+  const handleDeleteFieldMapping = (index: number) => {
+    const updatedMappings = [...currentNode.fieldMappings];
+    updatedMappings.splice(index, 1);
+    
+    setCurrentNode({
+      ...currentNode,
+      fieldMappings: updatedMappings
+    });
+  };
+  
+  // 保存节点
+  const handleSave = async () => {
+    if (!db) {
+      setMessage({
+        text: '数据库未初始化',
+        type: 'error'
+      });
       return;
     }
-
+    
+    if (!currentNode.name) {
+      setMessage({
+        text: '请输入节点名称',
+        type: 'error'
+      });
+      return;
+    }
+    
+    if (!currentNode.apiId) {
+      setMessage({
+        text: '请选择 API',
+        type: 'error'
+      });
+      return;
+    }
+    
+    setIsSaving(true);
+    try {
+      // 将自定义配置序列化为字符串，存储在 apiParams 中
+      const customConfig: CustomConfig = {
+        apiId: currentNode.apiId,
+        fieldMappings: currentNode.fieldMappings
+      };
+      
+      // 转换为数据库模型
+      const dbModel: DataCollectionConfigModel = {
+        NO: currentNode.id,
+        name: currentNode.name,
+        type: 'api',
+        config: {
+          // 使用 apiParams 存储自定义配置
+          apiParams: { customConfig: JSON.stringify(customConfig) },
+          baseUrl: '',
+          endpoint: '',
+          headers: {}
+        },
+        active: currentNode.active,
+        create_time: Date.now()
+      };
+      
+      if (currentNode.id) {
+        // 更新现有节点
+        await db.updateDataCollectionConfig(dbModel);
+        
+        // 更新节点列表中的当前节点，确保 apiName 正确显示
+        const updatedNodes = nodes.map(node => 
+          node.id === currentNode.id ? {
+            ...currentNode,
+            apiName: apis.find(api => api.NO === currentNode.apiId)?.name
+          } : node
+        );
+        setNodes(updatedNodes);
+        
+        setMessage({
+          text: '配置已更新',
+          type: 'success'
+        });
+      } else {
+        // 创建新节点
+        await db.addDataCollectionConfig(dbModel);
+        
+        // 重新加载数据以获取新的ID
+        await loadData();
+        
+        setMessage({
+          text: '配置已创建',
+          type: 'success'
+        });
+      }
+    } catch (error) {
+      console.error('保存失败:', error);
+      setMessage({
+        text: `保存失败: ${error instanceof Error ? error.message : String(error)}`,
+        type: 'error'
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  
+  // 删除节点
+  const handleDelete = () => {
+    if (!currentNode.id) {
+      setMessage({
+        text: '无法删除未保存的配置',
+        type: 'error'
+      });
+      return;
+    }
     setShowDeleteConfirm(true);
   };
-
+  
   // 确认删除
   const handleConfirmDelete = async () => {
-    if (!currentConfig.NO || !db) {
-      return;
-    }
-
+    if (!db || !currentNode.id) return;
+    
     setIsDeleting(true);
     try {
-      await db.deleteDataCollectionConfig(currentConfig.NO);
-      message.success('配置已删除');
-      form.resetFields();
-      setCurrentConfig({
-        name: '',
-        type: 'contract',
-        active: true,
-        config: {
-          chainId: '',
-          contractAddress: '',
-          methodName: '',
-          abi: '',
-          contractParams: []
-        }
+      // 从数据库删除
+      await db.deleteDataCollectionConfig(currentNode.id);
+      
+      const updatedNodes = nodes.filter(node => node.id !== currentNode.id);
+      setNodes(updatedNodes);
+      
+      if (updatedNodes.length > 0) {
+        setSelectedNodeId(updatedNodes[0].id || null);
+        setCurrentNode(updatedNodes[0]);
+      } else {
+        setSelectedNodeId(null);
+        setCurrentNode({
+          name: '',
+          active: true,
+          apiId: 0,
+          fieldMappings: []
+        });
+      }
+      
+      setShowDeleteConfirm(false);
+      setMessage({
+        text: '配置已删除',
+        type: 'success'
       });
-      loadConfigList();
-    } catch (error: any) {
-      console.error('删除配置失败:', error);
-      message.error(error.message || '删除配置失败');
+    } catch (error) {
+      console.error('删除失败:', error);
+      setMessage({
+        text: `删除失败: ${error instanceof Error ? error.message : String(error)}`,
+        type: 'error'
+      });
     } finally {
       setIsDeleting(false);
-      setShowDeleteConfirm(false);
     }
   };
-
-  // 测试数据采集配置
+  
+  // 关闭消息
+  const handleCloseMessage = () => {
+    setMessage(null);
+  };
+  
+  // 测试节点
   const handleTest = async () => {
+    if (!currentNode.apiId) {
+      setMessage({
+        text: '请选择 API',
+        type: 'error'
+      });
+      return;
+    }
+    
+    // 移除字段映射验证，允许无字段映射时也能测试
+    
+    setIsTesting(true);
+    setTestResult(null);
+    
     try {
-      const values = await form.validateFields();
-      setIsTesting(true);
-      setTestResult(null);
+      // 获取选中的 API 配置
+      const selectedApi = apis.find(api => api.NO === currentNode.apiId);
+      
+      if (!selectedApi) {
+        throw new Error('未找到选中的 API 配置');
+      }
+      
+      const logs: string[] = [];
+      
+      logs.push(`[${new Date().toISOString()}] 开始测试数据采集节点: ${currentNode.name}`);
+      logs.push(`[${new Date().toISOString()}] 使用 API: ${selectedApi.name}`);
+      
+      // 构建请求参数
+      let apiUrl = selectedApi.baseUrl || '';
+      
+      // 验证 URL 格式
+      if (!apiUrl || !apiUrl.trim()) {
+        throw new Error('API URL 为空，请在 API 配置中设置有效的 baseUrl');
+      }
       
       try {
-        let response;
-        
-        switch (values.type) {
-          case 'contract':
-            response = await fetch('/api/test-contract', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                chainId: values.config.chainId,
-                contractAddress: values.config.contractAddress,
-                methodName: values.config.methodName,
-                abi: values.config.abi,
-                params: values.config.contractParams
-              })
-            });
-            break;
+        new URL(apiUrl);
+      } catch (e) {
+        throw new Error(`API URL 格式无效: ${apiUrl}`);
+      }
+      
+      let method = selectedApi.method || 'GET';
+      let headers: Record<string, string> = {};
+      let body: string | null = null;
+      
+      // 添加API密钥（如果有）
+      if (selectedApi.apiKey) {
+        headers['X-API-Key'] = selectedApi.apiKey;
+        logs.push(`[${new Date().toISOString()}] 已添加 API 密钥`);
+      }
+      
+      // 添加认证信息（如果有）
+      if (selectedApi.apiSecret) {
+        headers['Authorization'] = `Bearer ${selectedApi.apiSecret}`;
+        logs.push(`[${new Date().toISOString()}] 已添加认证信息`);
+      }
+      
+      // 处理请求体（如果是POST请求）
+      if (method === 'POST' && selectedApi.payload) {
+        body = selectedApi.payload;
+        headers['Content-Type'] = 'application/json';
+        logs.push(`[${new Date().toISOString()}] 已设置 Content-Type: application/json`);
+      }
+      
+      // 处理自定义变量
+      if (selectedApi.customVariables) {
+        logs.push(`[${new Date().toISOString()}] 处理自定义变量...`);
+        Object.entries(selectedApi.customVariables).forEach(([key, value]) => {
+          const placeholder = `{${key}}`;
+          const oldUrl = apiUrl;
+          apiUrl = apiUrl.replace(placeholder, value);
+          
+          if (oldUrl !== apiUrl) {
+            logs.push(`[${new Date().toISOString()}] 替换变量 ${placeholder} -> ${value}`);
+          }
+          
+          if (body) {
+            const oldBody = body;
+            body = body.replace(placeholder, value);
             
-          case 'api':
-            response = await fetch('/api/test-api', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                baseUrl: values.config.baseUrl,
-                endpoint: values.config.endpoint,
-                params: values.config.apiParams,
-                headers: values.config.headers
-              })
-            });
-            break;
-            
-          case 'websocket':
-            response = await fetch('/api/test-websocket', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                url: values.config.url,
-                message: values.config.message
-              })
-            });
-            break;
-            
-          default:
-            throw new Error('不支持的数据源类型');
-        }
-        
-        const result = await response.json();
-        setTestResult(result);
-        
-        if (result.success) {
-          message.success('测试成功');
-        } else {
-          message.error(result.error || '测试失败');
-        }
-      } catch (error: any) {
-        console.error('测试过程中发生错误:', error);
-        setTestResult({
-          success: false,
-          message: '测试失败',
-          error: error.message
+            if (oldBody !== body) {
+              logs.push(`[${new Date().toISOString()}] 在请求体中替换变量 ${placeholder} -> ${value}`);
+            }
+          }
         });
-        message.error(error.message || '测试过程中发生错误');
-      } finally {
-        setIsTesting(false);
       }
+      
+      logs.push(`[${new Date().toISOString()}] 请求URL: ${apiUrl}`);
+      logs.push(`[${new Date().toISOString()}] 请求方法: ${method}`);
+      logs.push(`[${new Date().toISOString()}] 请求头: ${JSON.stringify(headers)}`);
+      if (body) {
+        logs.push(`[${new Date().toISOString()}] 请求体: ${body}`);
+      }
+      
+      logs.push(`[${new Date().toISOString()}] 发送请求...`);
+      logs.push(`[${new Date().toISOString()}] 注意: 如果遇到 CORS 问题，系统将自动尝试使用代理服务`);
+      
+      // 实际发送API请求
+      let responseData: any;
+      
+      try {
+        // 检查是否在 TamperMonkey 环境中
+        const isTM = isTamperMonkeyEnvironment();
+        if (isTM) {
+          logs.push(`[${new Date().toISOString()}] 检测到 TamperMonkey 环境，使用 GM_xmlhttpRequest 发送请求`);
+        } else {
+          logs.push(`[${new Date().toISOString()}] 未检测到 TamperMonkey 环境，将使用 fetch API`);
+        }
+        
+        // 使用工具函数发送请求
+        const startTime = Date.now();
+        responseData = await sendRequest(
+          apiUrl,
+          method as 'GET' | 'POST',
+          headers,
+          body,
+          30000 // 30秒超时
+        );
+        const endTime = Date.now();
+        
+        logs.push(`[${new Date().toISOString()}] 请求成功，耗时 ${endTime - startTime}ms`);
+        
+        // 检查响应数据
+        if (responseData === null || responseData === undefined) {
+          logs.push(`[${new Date().toISOString()}] 警告: 响应数据为空`);
+          responseData = {};
+        } else if (typeof responseData === 'string' && responseData.trim() === '') {
+          logs.push(`[${new Date().toISOString()}] 警告: 响应数据为空字符串`);
+          responseData = {};
+        }
+        
+        logs.push(`[${new Date().toISOString()}] 响应数据类型: ${typeof responseData}`);
+        logs.push(`[${new Date().toISOString()}] 响应数据: ${JSON.stringify(responseData, null, 2)}`);
+      } catch (error) {
+        logs.push(`[${new Date().toISOString()}] 请求失败: ${error instanceof Error ? error.message : String(error)}`);
+        throw error;
+      }
+      
+      logs.push(`[${new Date().toISOString()}] 开始提取字段...`);
+      
+      // 提取字段
+      const extractedData: Record<string, any> = {};
+      currentNode.fieldMappings.forEach(mapping => {
+        logs.push(`[${new Date().toISOString()}] 提取字段: ${mapping.sourceField} -> ${mapping.targetField}`);
+        
+        try {
+          // 从嵌套对象中获取值
+          const value = getNestedValue(responseData, mapping.sourceField);
+          extractedData[mapping.targetField] = value;
+          
+          if (value === undefined) {
+            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在`);
+          } else {
+            logs.push(`[${new Date().toISOString()}] 提取成功: ${mapping.targetField} = ${JSON.stringify(value)}`);
+          }
+        } catch (error) {
+          logs.push(`[${new Date().toISOString()}] 提取失败: ${error instanceof Error ? error.message : String(error)}`);
+          extractedData[mapping.targetField] = null;
+        }
+      });
+      
+      logs.push(`[${new Date().toISOString()}] 字段提取完成`);
+      logs.push(`[${new Date().toISOString()}] 测试完成`);
+      
+      setTestResult({
+        success: true,
+        message: '测试成功',
+        logs,
+        data: extractedData
+      });
     } catch (error) {
-      // 表单验证失败
+      console.error('测试失败:', error);
+      setTestResult({
+        success: false,
+        message: error instanceof Error ? error.message : String(error),
+        logs: [`[${new Date().toISOString()}] 错误: ${error instanceof Error ? error.message : String(error)}`]
+      });
+    } finally {
+      setIsTesting(false);
     }
   };
-
-  // 新建配置
-  const handleNew = () => {
-    form.resetFields();
-    setCurrentConfig({
-      name: '',
-      type: 'contract',
-      active: true,
-      config: {
-        chainId: '',
-        contractAddress: '',
-        methodName: '',
-        abi: '',
-        contractParams: []
-      }
-    });
+  
+  // 取消删除确认
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
   };
-
-  // 渲染不同类型的配置表单
-  const renderConfigFields = () => {
-    const type = form.getFieldValue('type');
-
-    switch (type) {
-      case 'contract':
-        return (
-          <>
-            <Form.Item
-              label="链ID"
-              name={['config', 'chainId']}
-              rules={[{ required: true, message: '请输入链ID' }]}
-            >
-              <Input placeholder="请输入链ID，例如：1（以太坊主网）" />
-            </Form.Item>
-            <Form.Item
-              label="合约地址"
-              name={['config', 'contractAddress']}
-              rules={[{ required: true, message: '请输入合约地址' }]}
-            >
-              <Input placeholder="请输入合约地址" />
-            </Form.Item>
-            <Form.Item
-              label="方法名"
-              name={['config', 'methodName']}
-              rules={[{ required: true, message: '请输入方法名' }]}
-            >
-              <Input placeholder="请输入要调用的方法名" />
-            </Form.Item>
-            <Form.Item
-              label="ABI"
-              name={['config', 'abi']}
-              rules={[{ required: true, message: '请输入合约ABI' }]}
-            >
-              <TextArea
-                rows={4}
-                placeholder="请输入合约ABI（JSON格式）"
-              />
-            </Form.Item>
-            <Form.Item
-              label="参数"
-              name={['config', 'contractParams']}
-            >
-              <TextArea
-                rows={4}
-                placeholder="请输入方法参数（JSON数组格式）"
-              />
-            </Form.Item>
-          </>
-        );
-
-      case 'api':
-        return (
-          <>
-            <Form.Item
-              label="基础URL"
-              name={['config', 'baseUrl']}
-              rules={[{ required: true, message: '请输入基础URL' }]}
-            >
-              <Input placeholder="请输入API的基础URL" />
-            </Form.Item>
-            <Form.Item
-              label="端点"
-              name={['config', 'endpoint']}
-              rules={[{ required: true, message: '请输入API端点' }]}
-            >
-              <Input placeholder="请输入API端点" />
-            </Form.Item>
-            <Form.Item
-              label="参数"
-              name={['config', 'apiParams']}
-            >
-              <TextArea
-                rows={4}
-                placeholder="请输入API参数（JSON对象格式）"
-              />
-            </Form.Item>
-            <Form.Item
-              label="请求头"
-              name={['config', 'headers']}
-            >
-              <TextArea
-                rows={4}
-                placeholder="请输入请求头（JSON对象格式）"
-              />
-            </Form.Item>
-          </>
-        );
-
-      case 'websocket':
-        return (
-          <>
-            <Form.Item
-              label="WebSocket URL"
-              name={['config', 'url']}
-              rules={[{ required: true, message: '请输入WebSocket URL' }]}
-            >
-              <Input placeholder="请输入WebSocket连接URL" />
-            </Form.Item>
-            <Form.Item
-              label="消息"
-              name={['config', 'message']}
-            >
-              <TextArea
-                rows={4}
-                placeholder="请输入要发送的消息（JSON格式）"
-              />
-            </Form.Item>
-          </>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  // 表格列定义
-  const columns = [
-    {
-      title: '编号',
-      dataIndex: 'NO',
-      key: 'NO'
-    },
-    {
-      title: '名称',
-      dataIndex: 'name',
-      key: 'name'
-    },
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => {
-        const typeMap = {
-          contract: '智能合约',
-          api: 'API',
-          websocket: 'WebSocket'
-        };
-        return typeMap[type as keyof typeof typeMap] || type;
-      }
-    },
-    {
-      title: '状态',
-      dataIndex: 'active',
-      key: 'active',
-      render: (active: boolean) => (
-        <Tag color={active ? 'success' : 'default'}>
-          {active ? '启用' : '禁用'}
-        </Tag>
-      )
-    },
-    {
-      title: '操作',
-      key: 'action',
-      render: (_: any, record: DataCollectionConfigModel) => (
-        <Button type="link" onClick={() => handleEdit(record)}>
-          编辑
-        </Button>
-      )
-    }
-  ];
-
-  return (
-    <div>
-      <TableCard>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Title level={4}>配置列表</Title>
-          <Button type="primary" onClick={handleNew}>
-            新建
-          </Button>
-        </div>
-        <Table
-          columns={columns}
-          dataSource={configList}
-          rowKey="NO"
-          loading={isLoading}
-        />
-      </TableCard>
-
-      <ConfigForm
-        form={form}
-        layout="vertical"
-        onValuesChange={handleValuesChange}
-        initialValues={currentConfig}
-      >
-        <Form.Item
-          label="配置名称"
-          name="name"
-          rules={[{ required: true, message: '请输入配置名称' }]}
-        >
-          <Input placeholder="请输入配置名称" />
-        </Form.Item>
-
-        <Form.Item
-          label="数据源类型"
-          name="type"
-          rules={[{ required: true, message: '请选择数据源类型' }]}
-        >
-          <Select>
-            <Option value="contract">智能合约</Option>
-            <Option value="api">API</Option>
-            <Option value="websocket">WebSocket</Option>
-          </Select>
-        </Form.Item>
-
-        <Form.Item
-          label="是否启用"
-          name="active"
-          valuePropName="checked"
-        >
-          <Switch />
-        </Form.Item>
-
-        {renderConfigFields()}
-      </ConfigForm>
-      
-      <ButtonGroup>
-        <Button
-          type="primary"
-          onClick={handleSave}
-          loading={isSaving}
-        >
-          保存
-        </Button>
-        <Button
-          onClick={handleTest}
-          loading={isTesting}
-          disabled={!currentConfig.NO}
-        >
-          测试
-        </Button>
-        <Button
-          danger
-          onClick={handleDelete}
-          loading={isDeleting}
-          disabled={!currentConfig.NO}
-        >
-          删除
-        </Button>
-      </ButtonGroup>
-      
-      {testResult && (
-        <ResultCard>
-          <Title level={4}>测试结果</Title>
-          <Descriptions bordered>
-            <Descriptions.Item label="状态">
-              {testResult.success ? (
-                <Tag color="success">成功</Tag>
-              ) : (
-                <Tag color="error">失败</Tag>
+  
+  // 获取选中的 API 名称
+  const selectedApiName = useMemo(() => {
+    const api = apis.find(api => api.NO === currentNode.apiId);
+    return api ? api.name : '未选择';
+  }, [apis, currentNode.apiId]);
+  
+  // 渲染字段映射表格
+  const renderFieldMappingTable = () => {
+    // 获取测试结果中提取的字段值
+    const extractedValues = testResult?.data || {};
+    
+    return (
+      <FieldMappingTable>
+        <thead>
+          <tr>
+            <TableHeader>源字段</TableHeader>
+            <TableHeader>目标字段</TableHeader>
+            <TableHeader>描述</TableHeader>
+            {testResult && testResult.success && <TableHeader>提取的值</TableHeader>}
+            <TableHeader>操作</TableHeader>
+          </tr>
+        </thead>
+        <tbody>
+          {currentNode.fieldMappings.map((mapping, index) => (
+            <tr key={index}>
+              <TableCell>
+                <Input
+                  value={mapping.sourceField}
+                  onChange={(e) => handleFieldMappingChange(index, 'sourceField', e.target.value)}
+                  placeholder="data.result.price"
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  value={mapping.targetField}
+                  onChange={(e) => handleFieldMappingChange(index, 'targetField', e.target.value)}
+                  placeholder="price"
+                />
+              </TableCell>
+              <TableCell>
+                <Input
+                  value={mapping.description}
+                  onChange={(e) => handleFieldMappingChange(index, 'description', e.target.value)}
+                  placeholder="价格"
+                />
+              </TableCell>
+              {testResult && testResult.success && (
+                <TableCell>
+                  {mapping.targetField in extractedValues ? (
+                    <div style={{ 
+                      maxWidth: '200px', 
+                      overflow: 'hidden', 
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      color: extractedValues[mapping.targetField] === null ? '#FF6666' : '#66CCFF'
+                    }}>
+                      {extractedValues[mapping.targetField] === null 
+                        ? '未找到' 
+                        : JSON.stringify(extractedValues[mapping.targetField])}
+                    </div>
+                  ) : (
+                    <div style={{ color: '#AAAAAA' }}>未测试</div>
+                  )}
+                </TableCell>
               )}
-            </Descriptions.Item>
-            <Descriptions.Item label="消息">
-              {testResult.message}
-            </Descriptions.Item>
-            {testResult.error && (
-              <Descriptions.Item label="错误">
-                {testResult.error}
-              </Descriptions.Item>
-            )}
-            {testResult.data && (
-              <Descriptions.Item label="数据" span={3}>
-                <pre>
-                  {JSON.stringify(testResult.data, null, 2)}
-                </pre>
-              </Descriptions.Item>
-            )}
-          </Descriptions>
-        </ResultCard>
+              <TableCell>
+                <SecondaryButton onClick={() => handleDeleteFieldMapping(index)}>
+                  删除
+                </SecondaryButton>
+              </TableCell>
+            </tr>
+          ))}
+        </tbody>
+      </FieldMappingTable>
+    );
+  };
+  
+  return (
+    <PageContainer>
+      <PageHeader>
+        <PageTitle>数据采集能力配置</PageTitle>
+        <ActionButton onClick={handleCreateNode}>
+          新建数据采集节点
+        </ActionButton>
+      </PageHeader>
+      
+      {message && (
+        <MessageBox type={message.type}>
+          <div>{message.text}</div>
+          <CloseButton onClick={handleCloseMessage}>×</CloseButton>
+        </MessageBox>
       )}
-
-      <Modal
-        title="确认删除"
-        open={showDeleteConfirm}
-        onOk={handleConfirmDelete}
-        onCancel={() => setShowDeleteConfirm(false)}
-        confirmLoading={isDeleting}
-      >
-        <p>确定要删除配置"{currentConfig.name}"吗？此操作不可恢复。</p>
-      </Modal>
-    </div>
+      
+      <ContentLayout>
+        {/* 左侧节点列表 */}
+        <NodeList>
+          <NodeListHeader>
+            数据采集节点列表
+          </NodeListHeader>
+          
+          {nodes.map(node => (
+            <NodeItem 
+              key={node.id} 
+              selected={node.id === selectedNodeId}
+              onClick={() => handleSelectNode(node)}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <NodeName selected={node.id === selectedNodeId}>{node.name}</NodeName>
+                <StatusIndicator active={node.active} />
+              </div>
+              <ApiName>{node.apiName || `API ID: ${node.apiId}`}</ApiName>
+            </NodeItem>
+          ))}
+          
+          {nodes.length === 0 && !isLoading && (
+            <div style={{ padding: '15px', color: '#AAAAAA', textAlign: 'center' }}>
+              暂无数据采集节点
+            </div>
+          )}
+          
+          {isLoading && (
+            <div style={{ padding: '15px', color: '#AAAAAA', textAlign: 'center' }}>
+              加载中...
+            </div>
+          )}
+        </NodeList>
+        
+        {/* 右侧配置面板 */}
+        <ConfigPanel>
+          <FormSection>
+            <SectionTitle>基本信息</SectionTitle>
+            
+            <FormRow>
+              <FormGroup>
+                <Label>节点名称</Label>
+                <Input 
+                  type="text" 
+                  value={currentNode.name} 
+                  onChange={handleNameChange}
+                  placeholder="请输入数据采集节点名称"
+                />
+              </FormGroup>
+              
+              <FormGroup flex={0.5}>
+                <Label>状态</Label>
+                <div style={{ display: 'flex', alignItems: 'center', height: '38px' }}>
+                  <Checkbox 
+                    type="checkbox" 
+                    checked={currentNode.active} 
+                    onChange={handleStatusChange}
+                    id="node-status"
+                  />
+                  <label htmlFor="node-status" style={{ color: '#FFFFFF' }}>启用</label>
+                </div>
+              </FormGroup>
+            </FormRow>
+            
+            <FormRow>
+              <FormGroup>
+                <Label>选择 API</Label>
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <Select 
+                    value={currentNode.apiId} 
+                    onChange={handleApiChange}
+                  >
+                    <option value={0}>请选择 API</option>
+                    {apis.map(api => (
+                      <option key={api.NO} value={api.NO}>
+                        {api.name}
+                      </option>
+                    ))}
+                  </Select>
+                  <PrimaryButton 
+                    onClick={handleFetchApiData}
+                    disabled={isLoadingApi || !currentNode.apiId}
+                  >
+                    {isLoadingApi ? '获取中...' : '获取数据'}
+                  </PrimaryButton>
+                </div>
+              </FormGroup>
+            </FormRow>
+          </FormSection>
+          
+          {/* API 响应结果 */}
+          {apiResponse && (
+            <FormSection>
+              <SectionTitle>API 响应结果</SectionTitle>
+              <ApiResponsePanel>
+                <ApiResponseTitle>
+                  状态: {apiResponse.success ? '成功' : '失败'}
+                </ApiResponseTitle>
+                
+                <div style={{ marginBottom: '15px' }}>
+                  <strong>消息:</strong> {apiResponse.message}
+                </div>
+                
+                {apiResponse.error && (
+                  <div style={{ marginBottom: '15px', color: '#FF6666' }}>
+                    <strong>错误:</strong> {apiResponse.error}
+                  </div>
+                )}
+                
+                {apiResponse.extractedFields && Object.keys(apiResponse.extractedFields).length > 0 && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <strong>提取的字段值:</strong>
+                    <ApiResponseContent>
+                      {JSON.stringify(apiResponse.extractedFields, null, 2)}
+                    </ApiResponseContent>
+                  </div>
+                )}
+                
+                {apiResponse.data && (
+                  <div style={{ marginBottom: '15px' }}>
+                    <strong>原始数据:</strong>
+                    <ApiResponseContent>
+                      {JSON.stringify(apiResponse.data, null, 2)}
+                    </ApiResponseContent>
+                  </div>
+                )}
+                
+                {apiResponse.logs && (
+                  <div>
+                    <strong>API 交互过程:</strong>
+                    <ApiResponseContent>
+                      {apiResponse.logs.join('\n')}
+                    </ApiResponseContent>
+                  </div>
+                )}
+              </ApiResponsePanel>
+            </FormSection>
+          )}
+          
+          <FormSection>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <SectionTitle>传出字段映射</SectionTitle>
+              <SecondaryButton onClick={handleAddFieldMapping}>
+                添加字段
+              </SecondaryButton>
+            </div>
+            
+            {currentNode.fieldMappings.length > 0 ? (
+              renderFieldMappingTable()
+            ) : (
+              <div style={{ color: '#AAAAAA', textAlign: 'center', padding: '20px' }}>
+                暂无字段映射，请添加或获取 API 数据后自动生成
+              </div>
+            )}
+          </FormSection>
+          
+          <ButtonGroup>
+            <PrimaryButton 
+              onClick={handleSave}
+              disabled={isSaving}
+            >
+              {isSaving ? '保存中...' : '保存'}
+            </PrimaryButton>
+            
+            <PrimaryButton 
+              onClick={handleTest}
+              disabled={isTesting || !currentNode.apiId}
+            >
+              {isTesting ? '测试中...' : '测试'}
+            </PrimaryButton>
+            
+            <DangerButton 
+              onClick={handleDelete}
+              disabled={isDeleting || !currentNode.id}
+            >
+              {isDeleting ? '删除中...' : '删除'}
+            </DangerButton>
+          </ButtonGroup>
+          
+          {testResult && (
+            <TestResultPanel>
+              <TestResultTitle>
+                测试结果: {testResult.success ? '成功' : '失败'}
+              </TestResultTitle>
+              
+              <div style={{ marginBottom: '15px' }}>
+                <strong>消息:</strong> {testResult.message}
+              </div>
+              
+              {testResult.data && (
+                <div style={{ marginBottom: '15px' }}>
+                  <strong>提取的数据:</strong>
+                  <TestResultContent>
+                    {JSON.stringify(testResult.data, null, 2)}
+                  </TestResultContent>
+                </div>
+              )}
+              
+              <div>
+                <strong>测试日志:</strong>
+                <TestResultContent>
+                  {testResult.logs.join('\n')}
+                </TestResultContent>
+              </div>
+            </TestResultPanel>
+          )}
+        </ConfigPanel>
+      </ContentLayout>
+      
+      {/* 删除确认对话框 */}
+      {showDeleteConfirm && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: '#2A2A2A',
+            padding: '20px',
+            borderRadius: '5px',
+            width: '400px'
+          }}>
+            <h3 style={{ color: '#F0B90B', marginTop: 0 }}>确认删除</h3>
+            <p style={{ color: '#FFFFFF' }}>
+              确定要删除数据采集节点 "{currentNode.name}" 吗？此操作不可恢复。
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+              <SecondaryButton onClick={handleCancelDelete}>
+                取消
+              </SecondaryButton>
+              <DangerButton onClick={handleConfirmDelete} disabled={isDeleting}>
+                {isDeleting ? '删除中...' : '确认删除'}
+              </DangerButton>
+            </div>
+          </div>
+        </div>
+      )}
+    </PageContainer>
   );
 };
 
-export default DataCollectionConfigPage; 
+export default DataCollectionConfig; 

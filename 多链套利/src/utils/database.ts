@@ -49,14 +49,51 @@ export class Database {
     return new Promise((resolve, reject) => {
       const transaction = this.db.transaction([storeName], 'readwrite');
       const store = transaction.objectStore(storeName);
-      const request = store.clear();
-
-      request.onsuccess = () => {
+      
+      // 不再清空存储区域，而是直接保存数据
+      if (Array.isArray(data)) {
+        // 如果是数组，先清空存储区域，然后逐个添加
+        const clearRequest = store.clear();
+        
+        clearRequest.onsuccess = () => {
+          // 使用事务完成计数器来确保所有添加操作完成
+          let completed = 0;
+          const total = data.length;
+          
+          if (total === 0) {
+            // 如果数组为空，直接完成
+            resolve();
+            return;
+          }
+          
+          // 逐个添加数据
+          data.forEach((item) => {
+            const addRequest = store.add(item);
+            
+            addRequest.onsuccess = () => {
+              completed++;
+              if (completed === total) {
+                resolve();
+              }
+            };
+            
+            addRequest.onerror = (event) => {
+              console.error('添加数据失败:', event);
+              reject(addRequest.error);
+            };
+          });
+        };
+        
+        clearRequest.onerror = () => {
+          console.error('清空存储区域失败:', clearRequest.error);
+          reject(clearRequest.error);
+        };
+      } else {
+        // 如果不是数组，直接添加单个数据
         const addRequest = store.add(data);
         addRequest.onsuccess = () => resolve();
         addRequest.onerror = () => reject(addRequest.error);
-      };
-      request.onerror = () => reject(request.error);
+      }
     });
   }
 
