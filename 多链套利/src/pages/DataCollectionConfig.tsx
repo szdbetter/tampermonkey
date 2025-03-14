@@ -751,6 +751,9 @@ const DataCollectionConfig: React.FC = () => {
         });
         
         logs.push(`[${new Date().toISOString()}] 字段提取完成`);
+      } else {
+        logs.push(`[${new Date().toISOString()}] 未配置字段映射，跳过字段提取`);
+        // 不再自动生成字段映射建议
       }
       
       logs.push(`[${new Date().toISOString()}] API调用完成`);
@@ -764,21 +767,11 @@ const DataCollectionConfig: React.FC = () => {
         extractedFields: Object.keys(extractedFields).length > 0 ? extractedFields : undefined
       });
       
-      // 如果没有字段映射，自动生成一些建议的字段映射
-      if (currentNode.fieldMappings.length === 0) {
-        // 根据API响应自动生成字段映射建议
-        const suggestedMappings = generateFieldMappingSuggestions(responseData);
-        
-        if (suggestedMappings.length > 0) {
-          logs.push(`[${new Date().toISOString()}] 自动生成了 ${suggestedMappings.length} 个字段映射建议`);
-          setCurrentNode(prev => ({
-            ...prev,
-            fieldMappings: suggestedMappings
-          }));
-        } else {
-          logs.push(`[${new Date().toISOString()}] 无法自动生成字段映射建议，请手动添加`);
-        }
-      }
+      // 更新字段映射中的值
+      setCurrentNode(prev => ({
+        ...prev,
+        // 不自动生成字段映射
+      }));
     } catch (error) {
       console.error('获取 API 数据失败:', error);
       
@@ -1280,8 +1273,8 @@ const DataCollectionConfig: React.FC = () => {
   
   // 渲染字段映射表格
   const renderFieldMappingTable = () => {
-    // 获取测试结果中提取的字段值
-    const extractedValues = testResult?.data || {};
+    // 获取API响应中提取的字段值
+    const extractedValues = apiResponse?.extractedFields || {};
     
     return (
       <FieldMappingTable>
@@ -1290,7 +1283,7 @@ const DataCollectionConfig: React.FC = () => {
             <TableHeader>源字段</TableHeader>
             <TableHeader>目标字段</TableHeader>
             <TableHeader>描述</TableHeader>
-            {testResult && testResult.success && <TableHeader>提取的值</TableHeader>}
+            <TableHeader>值</TableHeader>
             <TableHeader>操作</TableHeader>
           </tr>
         </thead>
@@ -1318,25 +1311,24 @@ const DataCollectionConfig: React.FC = () => {
                   placeholder="价格"
                 />
               </TableCell>
-              {testResult && testResult.success && (
-                <TableCell>
-                  {mapping.targetField in extractedValues ? (
-                    <div style={{ 
-                      maxWidth: '200px', 
-                      overflow: 'hidden', 
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: extractedValues[mapping.targetField] === null ? '#FF6666' : '#66CCFF'
-                    }}>
-                      {extractedValues[mapping.targetField] === null 
-                        ? '未找到' 
-                        : JSON.stringify(extractedValues[mapping.targetField])}
-                    </div>
-                  ) : (
-                    <div style={{ color: '#AAAAAA' }}>未测试</div>
-                  )}
-                </TableCell>
-              )}
+              <TableCell>
+                {mapping.targetField in extractedValues ? (
+                  <div style={{ 
+                    maxWidth: '200px', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: extractedValues[mapping.targetField] === null ? '#FF6666' : '#66CCFF',
+                    padding: '8px 0'
+                  }}>
+                    {extractedValues[mapping.targetField] === null 
+                      ? '未找到' 
+                      : JSON.stringify(extractedValues[mapping.targetField])}
+                  </div>
+                ) : (
+                  <div style={{ color: '#AAAAAA', padding: '8px 0' }}>未获取</div>
+                )}
+              </TableCell>
               <TableCell>
                 <SecondaryButton onClick={() => handleDeleteFieldMapping(index)}>
                   删除
@@ -1352,7 +1344,7 @@ const DataCollectionConfig: React.FC = () => {
   return (
     <PageContainer>
       <PageHeader>
-        <PageTitle>数据采集能力配置</PageTitle>
+        <PageTitle>数据采集配置</PageTitle>
         <ActionButton onClick={handleCreateNode}>
           新建数据采集节点
         </ActionButton>
@@ -1369,32 +1361,35 @@ const DataCollectionConfig: React.FC = () => {
         {/* 左侧节点列表 */}
         <NodeList>
           <NodeListHeader>
-            数据采集节点列表
+            配置列表
+            <ActionButton onClick={handleCreateNode}>
+              新建
+            </ActionButton>
           </NodeListHeader>
           
           {nodes.map(node => (
             <NodeItem 
               key={node.id} 
-              selected={node.id === selectedNodeId}
+              selected={selectedNodeId === node.id}
               onClick={() => handleSelectNode(node)}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <NodeName selected={node.id === selectedNodeId}>{node.name}</NodeName>
-                <StatusIndicator active={node.active} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <NodeName selected={selectedNodeId === node.id}>
+                  {node.name}
+                </NodeName>
+                <StatusIndicator active={node.active}>
+                  {node.active ? '启用' : '禁用'}
+                </StatusIndicator>
               </div>
-              <ApiName>{node.apiName || `API ID: ${node.apiId}`}</ApiName>
+              <ApiName>
+                API: {node.apiName || '未选择'}
+              </ApiName>
             </NodeItem>
           ))}
           
-          {nodes.length === 0 && !isLoading && (
-            <div style={{ padding: '15px', color: '#AAAAAA', textAlign: 'center' }}>
-              暂无数据采集节点
-            </div>
-          )}
-          
-          {isLoading && (
-            <div style={{ padding: '15px', color: '#AAAAAA', textAlign: 'center' }}>
-              加载中...
+          {nodes.length === 0 && (
+            <div style={{ padding: '20px', color: '#AAAAAA', textAlign: 'center' }}>
+              暂无配置，点击"新建"按钮创建
             </div>
           )}
         </NodeList>
@@ -1407,24 +1402,21 @@ const DataCollectionConfig: React.FC = () => {
             <FormRow>
               <FormGroup>
                 <Label>节点名称</Label>
-                <Input 
-                  type="text" 
-                  value={currentNode.name} 
+                <Input
+                  value={currentNode.name}
                   onChange={handleNameChange}
-                  placeholder="请输入数据采集节点名称"
+                  placeholder="输入节点名称"
                 />
               </FormGroup>
-              
-              <FormGroup flex={0.5}>
+              <FormGroup>
                 <Label>状态</Label>
-                <div style={{ display: 'flex', alignItems: 'center', height: '38px' }}>
-                  <Checkbox 
-                    type="checkbox" 
-                    checked={currentNode.active} 
+                <div>
+                  <Checkbox
+                    type="checkbox"
+                    checked={currentNode.active}
                     onChange={handleStatusChange}
-                    id="node-status"
                   />
-                  <label htmlFor="node-status" style={{ color: '#FFFFFF' }}>启用</label>
+                  启用
                 </div>
               </FormGroup>
             </FormRow>
@@ -1433,18 +1425,19 @@ const DataCollectionConfig: React.FC = () => {
               <FormGroup>
                 <Label>选择 API</Label>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <Select 
-                    value={currentNode.apiId} 
+                  <Select
+                    value={currentNode.apiId || ''}
                     onChange={handleApiChange}
                   >
-                    <option value={0}>请选择 API</option>
+                    <option value="">-- 请选择 API --</option>
                     {apis.map(api => (
                       <option key={api.NO} value={api.NO}>
                         {api.name}
                       </option>
                     ))}
                   </Select>
-                  <PrimaryButton 
+                  
+                  <PrimaryButton
                     onClick={handleFetchApiData}
                     disabled={isLoadingApi || !currentNode.apiId}
                   >
@@ -1455,76 +1448,16 @@ const DataCollectionConfig: React.FC = () => {
             </FormRow>
           </FormSection>
           
-          {/* API 响应结果 */}
-          {apiResponse && (
-            <FormSection>
-              <SectionTitle>API 响应结果</SectionTitle>
-              <ApiResponsePanel>
-                <ApiResponseTitle>
-                  状态: {apiResponse.success ? '成功' : '失败'}
-                </ApiResponseTitle>
-                
-                <div style={{ marginBottom: '15px' }}>
-                  <strong>消息:</strong> {apiResponse.message}
-                </div>
-                
-                {apiResponse.error && (
-                  <div style={{ marginBottom: '15px', color: '#FF6666' }}>
-                    <strong>错误:</strong> {apiResponse.error}
-                  </div>
-                )}
-                
-                {apiResponse.extractedFields && Object.keys(apiResponse.extractedFields).length > 0 && (
-                  <div style={{ marginBottom: '15px' }}>
-                    <strong>提取的字段值:</strong>
-                    <ApiResponseContent>
-                      {JSON.stringify(apiResponse.extractedFields, null, 2)}
-                    </ApiResponseContent>
-                  </div>
-                )}
-                
-                {apiResponse.data && (
-                  <div style={{ marginBottom: '15px' }}>
-                    <strong>原始数据:</strong>
-                    <ApiResponseContent>
-                      {JSON.stringify(apiResponse.data, null, 2)}
-                    </ApiResponseContent>
-                  </div>
-                )}
-                
-                {apiResponse.logs && (
-                  <div>
-                    <strong>API 交互过程:</strong>
-                    <ApiResponseContent>
-                      {apiResponse.logs.join('\n')}
-                    </ApiResponseContent>
-                  </div>
-                )}
-              </ApiResponsePanel>
-            </FormSection>
-          )}
-          
           <FormSection>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <SectionTitle>传出字段映射</SectionTitle>
-              <SecondaryButton onClick={handleAddFieldMapping}>
-                添加字段
-              </SecondaryButton>
-            </div>
+            <SectionTitle>传出字段映射</SectionTitle>
             
-            {currentNode.fieldMappings.length > 0 ? (
-              renderFieldMappingTable()
-            ) : (
-              <div style={{ color: '#AAAAAA', textAlign: 'center', padding: '20px' }}>
-                暂无字段映射，请添加或获取 API 数据后自动生成
-              </div>
-            )}
+            {renderFieldMappingTable()}
           </FormSection>
           
           <ButtonGroup>
             <PrimaryButton 
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isSaving || !currentNode.name || !currentNode.apiId}
             >
               {isSaving ? '保存中...' : '保存'}
             </PrimaryButton>
@@ -1554,7 +1487,7 @@ const DataCollectionConfig: React.FC = () => {
                 <strong>消息:</strong> {testResult.message}
               </div>
               
-              {testResult.data && (
+              {testResult.data && Object.keys(testResult.data).length > 0 && (
                 <div style={{ marginBottom: '15px' }}>
                   <strong>提取的数据:</strong>
                   <TestResultContent>
@@ -1570,6 +1503,51 @@ const DataCollectionConfig: React.FC = () => {
                 </TestResultContent>
               </div>
             </TestResultPanel>
+          )}
+          
+          {/* 将 API 响应结果移到页面最下方 */}
+          {apiResponse && (
+            <ApiResponsePanel>
+              <ApiResponseTitle>
+                API 响应结果: {apiResponse.success ? '成功' : '失败'}
+              </ApiResponseTitle>
+              
+              <div style={{ marginBottom: '15px' }}>
+                <strong>状态:</strong> {apiResponse.success ? '成功' : '失败'}
+              </div>
+              
+              <div style={{ marginBottom: '15px' }}>
+                <strong>消息:</strong> {apiResponse.message}
+                {apiResponse.error && <div style={{ color: '#FF6666' }}>{apiResponse.error}</div>}
+              </div>
+              
+              {apiResponse.data && (
+                <div style={{ marginBottom: '15px' }}>
+                  <strong>响应数据:</strong>
+                  <ApiResponseContent>
+                    {JSON.stringify(apiResponse.data, null, 2)}
+                  </ApiResponseContent>
+                </div>
+              )}
+              
+              {apiResponse.extractedFields && Object.keys(apiResponse.extractedFields).length > 0 && (
+                <div style={{ marginBottom: '15px' }}>
+                  <strong>提取的字段:</strong>
+                  <ApiResponseContent>
+                    {JSON.stringify(apiResponse.extractedFields, null, 2)}
+                  </ApiResponseContent>
+                </div>
+              )}
+              
+              {apiResponse.logs && (
+                <div>
+                  <strong>API 交互过程:</strong>
+                  <ApiResponseContent>
+                    {apiResponse.logs.join('\n')}
+                  </ApiResponseContent>
+                </div>
+              )}
+            </ApiResponsePanel>
           )}
         </ConfigPanel>
       </ContentLayout>
