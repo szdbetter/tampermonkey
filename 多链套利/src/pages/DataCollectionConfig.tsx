@@ -337,6 +337,7 @@ interface DataCollectionNodeModel {
   active: boolean;
   apiId: number;
   apiName?: string;
+  apiType?: 'HTTP' | 'CHAIN';
   fieldMappings: FieldMapping[];
 }
 
@@ -459,6 +460,7 @@ const DataCollectionConfig: React.FC = () => {
           active: node.active,
           apiId: apiId,
           apiName: apiConfig?.name,
+          apiType: apiConfig?.apiType || 'HTTP',
           fieldMappings: fieldMappings
         };
       });
@@ -494,6 +496,7 @@ const DataCollectionConfig: React.FC = () => {
       name: '新数据采集节点',
       active: true,
       apiId: 0, // 初始化为0，表示未选择API
+      apiType: 'HTTP', // 默认为HTTP类型
       fieldMappings: []
     };
     setSelectedNodeId(null);
@@ -521,10 +524,13 @@ const DataCollectionConfig: React.FC = () => {
   // 更新 API ID 并自动加载字段映射
   const handleApiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const apiId = parseInt(e.target.value);
+    const selectedApi = apis.find(api => api.NO === apiId);
+    
     setCurrentNode({
       ...currentNode,
       apiId,
-      apiName: apis.find(api => api.NO === apiId)?.name,
+      apiName: selectedApi?.name,
+      apiType: selectedApi?.apiType || 'HTTP',
       fieldMappings: [] // 清空字段映射，等待从API配置中加载
     });
     
@@ -1023,10 +1029,62 @@ const DataCollectionConfig: React.FC = () => {
       });
       
       // 更新字段映射中的值
-      setCurrentNode(prev => ({
-        ...prev,
-        // 不自动生成字段映射
-      }));
+      setCurrentNode(prev => {
+        // 如果是链上数据类型的API，自动添加字段映射
+        if (selectedApi.apiType === 'CHAIN' && responseData && responseData.result) {
+          const result = responseData.result;
+          const newFieldMappings: FieldMapping[] = [...prev.fieldMappings];
+          
+          // 检查result是否是对象，并且包含hex、decimal、formatted等字段
+          if (typeof result === 'object' && result !== null) {
+            // 遍历result对象的所有属性
+            Object.entries(result).forEach(([key, value]) => {
+              // 检查是否已经存在相同的sourceField
+              const existingIndex = newFieldMappings.findIndex(
+                mapping => mapping.sourceField === `result.${key}`
+              );
+              
+              if (existingIndex === -1) {
+                // 不存在，添加新的字段映射
+                const methodName = selectedApi.methodName || 'result';
+                const newMapping: FieldMapping = {
+                  sourceField: `result.${key}`,
+                  targetField: `${methodName}_${key}`,
+                  description: `${methodName} ${key}`
+                };
+                newFieldMappings.push(newMapping);
+                
+                // 添加到提取字段中，以便显示值
+                extractedFields[newMapping.targetField] = value;
+                logs.push(`[${new Date().toISOString()}] 自动添加字段映射: ${newMapping.sourceField} -> ${newMapping.targetField}`);
+              } else {
+                // 已存在，更新提取字段的值
+                extractedFields[newFieldMappings[existingIndex].targetField] = value;
+              }
+            });
+            
+            // 更新API响应中的提取字段
+            setApiResponse(prev => {
+              if (prev) {
+                return {
+                  ...prev,
+                  extractedFields: extractedFields
+                };
+              }
+              return prev;
+            });
+            
+            logs.push(`[${new Date().toISOString()}] 自动添加了 ${Object.keys(result).length} 个字段映射`);
+          }
+          
+          return {
+            ...prev,
+            fieldMappings: newFieldMappings
+          };
+        }
+        
+        return prev;
+      });
     } catch (error) {
       console.error('获取 API 数据失败:', error);
       
@@ -1596,9 +1654,9 @@ const DataCollectionConfig: React.FC = () => {
       <FieldMappingTable>
         <thead>
           <tr>
-            <TableHeader>源字段</TableHeader>
-            <TableHeader>目标字段</TableHeader>
-            <TableHeader>描述</TableHeader>
+            <TableHeader>自定义字段名</TableHeader>
+            <TableHeader>显示名称</TableHeader>
+            <TableHeader>JSON路径</TableHeader>
             <TableHeader>值</TableHeader>
             <TableHeader>操作</TableHeader>
           </tr>
@@ -1606,13 +1664,6 @@ const DataCollectionConfig: React.FC = () => {
         <tbody>
           {currentNode.fieldMappings.map((mapping, index) => (
             <tr key={index}>
-              <TableCell>
-                <Input
-                  value={mapping.sourceField}
-                  onChange={(e) => handleFieldMappingChange(index, 'sourceField', e.target.value)}
-                  placeholder="data.result.price"
-                />
-              </TableCell>
               <TableCell>
                 <Input
                   value={mapping.targetField}
@@ -1628,6 +1679,13 @@ const DataCollectionConfig: React.FC = () => {
                 />
               </TableCell>
               <TableCell>
+                <Input
+                  value={mapping.sourceField}
+                  onChange={(e) => handleFieldMappingChange(index, 'sourceField', e.target.value)}
+                  placeholder="data.result.price"
+                />
+              </TableCell>
+              <TableCell>
                 {mapping.targetField in extractedValues ? (
                   <div style={{ 
                     maxWidth: '200px', 
@@ -1639,7 +1697,7 @@ const DataCollectionConfig: React.FC = () => {
                   }}>
                     {extractedValues[mapping.targetField] === null 
                       ? '未找到' 
-                      : JSON.stringify(extractedValues[mapping.targetField])}
+                      : formatNumber(extractedValues[mapping.targetField])}
                   </div>
                 ) : (
                   <div style={{ color: '#AAAAAA', padding: '8px 0' }}>未获取</div>
@@ -1655,6 +1713,27 @@ const DataCollectionConfig: React.FC = () => {
         </tbody>
       </FieldMappingTable>
     );
+  };
+  
+  // 添加千位符格式化函数
+  const formatNumber = (value: any): string => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    
+    // 如果是数字或可以转换为数字
+    if (!isNaN(Number(value))) {
+      // 转换为数字并添加千位符
+      return Number(value).toLocaleString('zh-CN');
+    }
+    
+    // 如果是对象，可能需要递归处理
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+    
+    // 其他情况直接返回字符串
+    return String(value);
   };
   
   return (
@@ -1698,7 +1777,7 @@ const DataCollectionConfig: React.FC = () => {
                 </StatusIndicator>
               </div>
               <ApiName>
-                API: {node.apiName || '未选择'}
+                API: {node.apiName ? `${node.apiName} (${node.apiType})` : '未选择'}
               </ApiName>
             </NodeItem>
           ))}
@@ -1748,7 +1827,7 @@ const DataCollectionConfig: React.FC = () => {
                     <option value="">-- 请选择 API --</option>
                     {apis.map(api => (
                       <option key={api.NO} value={api.NO}>
-                        {api.name}
+                        {api.name} ({api.apiType || 'HTTP'})
                       </option>
                     ))}
                   </Select>
