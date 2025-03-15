@@ -1250,11 +1250,43 @@ const DataCollectionConfig: React.FC = () => {
         
         try {
           // 从嵌套对象中获取值
-          const value = getNestedValue(responseData, mapping.sourceField);
+          let value = getNestedValue(responseData, mapping.sourceField);
+          
+          // 如果值为undefined，尝试其他可能的路径
+          if (value === undefined) {
+            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，尝试其他可能的路径...`);
+            
+            // 尝试直接从顶层对象获取
+            if (responseData[mapping.targetField] !== undefined) {
+              value = responseData[mapping.targetField];
+              logs.push(`[${new Date().toISOString()}] 从顶层对象找到字段 ${mapping.targetField}`);
+            }
+            
+            // 尝试从quote对象获取
+            else if (responseData.quote && responseData.quote[mapping.targetField] !== undefined) {
+              value = responseData.quote[mapping.targetField];
+              logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${mapping.targetField}`);
+            }
+            
+            // 尝试从quote对象获取，使用sourceField的最后一部分
+            else if (responseData.quote) {
+              const lastPart = mapping.sourceField.split('.').pop();
+              if (lastPart && responseData.quote[lastPart] !== undefined) {
+                value = responseData.quote[lastPart];
+                logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${lastPart}`);
+              }
+            }
+          }
+          
           extractedData[mapping.targetField] = value;
           
           if (value === undefined) {
-            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在`);
+            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，所有尝试都失败了`);
+            // 打印响应数据的结构，帮助调试
+            logs.push(`[${new Date().toISOString()}] 响应数据结构: ${JSON.stringify(Object.keys(responseData))}`);
+            if (responseData.quote) {
+              logs.push(`[${new Date().toISOString()}] quote对象结构: ${JSON.stringify(Object.keys(responseData.quote))}`);
+            }
           } else {
             logs.push(`[${new Date().toISOString()}] 提取成功: ${mapping.targetField} = ${JSON.stringify(value)}`);
           }
@@ -1311,6 +1343,9 @@ const DataCollectionConfig: React.FC = () => {
       return undefined;
     }
     
+    // 添加调试日志
+    console.log(`尝试从路径 ${path} 获取值，对象类型: ${typeof obj}`);
+    
     // 处理数组索引和嵌套对象
     // 支持格式: data.items[0].name 或 data.items.0.name
     const parts = path.split('.');
@@ -1318,6 +1353,9 @@ const DataCollectionConfig: React.FC = () => {
     
     for (let i = 0; i < parts.length; i++) {
       let part = parts[i];
+      
+      // 添加调试日志
+      console.log(`处理路径部分: ${part}, 当前结果类型: ${typeof result}`);
       
       // 处理数组索引格式 items[0]
       const arrayMatch = part.match(/^(.*)\[(\d+)\]$/);
@@ -1327,19 +1365,23 @@ const DataCollectionConfig: React.FC = () => {
         
         // 先获取数组
         if (arrayName && result[arrayName] === undefined) {
+          console.log(`数组 ${arrayName} 不存在`);
           return undefined;
         }
         
         if (arrayName) {
           result = result[arrayName];
+          console.log(`获取数组 ${arrayName}, 结果类型: ${typeof result}`);
         }
         
         // 再获取索引元素
         if (!Array.isArray(result) || index >= result.length) {
+          console.log(`索引 ${index} 超出数组范围或结果不是数组`);
           return undefined;
         }
         
         result = result[index];
+        console.log(`获取索引 ${index} 的元素, 结果类型: ${typeof result}`);
         continue;
       }
       
@@ -1347,20 +1389,34 @@ const DataCollectionConfig: React.FC = () => {
       if (/^\d+$/.test(part) && Array.isArray(result)) {
         const index = parseInt(part, 10);
         if (index >= result.length) {
+          console.log(`索引 ${index} 超出数组范围`);
           return undefined;
         }
         result = result[index];
+        console.log(`获取索引 ${index} 的元素, 结果类型: ${typeof result}`);
         continue;
       }
       
       // 普通对象属性
-      if (result === null || result === undefined || result[part] === undefined) {
+      if (result === null || result === undefined) {
+        console.log(`结果为 null 或 undefined`);
+        return undefined;
+      }
+      
+      if (result[part] === undefined) {
+        console.log(`属性 ${part} 在对象中不存在`);
+        // 尝试打印对象的所有键，帮助调试
+        if (typeof result === 'object') {
+          console.log(`对象的可用键: ${Object.keys(result).join(', ')}`);
+        }
         return undefined;
       }
       
       result = result[part];
+      console.log(`获取属性 ${part}, 结果: ${JSON.stringify(result)}`);
     }
     
+    console.log(`最终结果: ${JSON.stringify(result)}`);
     return result;
   };
   
@@ -1774,11 +1830,43 @@ const DataCollectionConfig: React.FC = () => {
         
         try {
           // 从嵌套对象中获取值
-          const value = getNestedValue(responseData, mapping.sourceField);
+          let value = getNestedValue(responseData, mapping.sourceField);
+          
+          // 如果值为undefined，尝试其他可能的路径
+          if (value === undefined) {
+            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，尝试其他可能的路径...`);
+            
+            // 尝试直接从顶层对象获取
+            if (responseData[mapping.targetField] !== undefined) {
+              value = responseData[mapping.targetField];
+              logs.push(`[${new Date().toISOString()}] 从顶层对象找到字段 ${mapping.targetField}`);
+            }
+            
+            // 尝试从quote对象获取
+            else if (responseData.quote && responseData.quote[mapping.targetField] !== undefined) {
+              value = responseData.quote[mapping.targetField];
+              logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${mapping.targetField}`);
+            }
+            
+            // 尝试从quote对象获取，使用sourceField的最后一部分
+            else if (responseData.quote) {
+              const lastPart = mapping.sourceField.split('.').pop();
+              if (lastPart && responseData.quote[lastPart] !== undefined) {
+                value = responseData.quote[lastPart];
+                logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${lastPart}`);
+              }
+            }
+          }
+          
           extractedData[mapping.targetField] = value;
           
           if (value === undefined) {
-            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在`);
+            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，所有尝试都失败了`);
+            // 打印响应数据的结构，帮助调试
+            logs.push(`[${new Date().toISOString()}] 响应数据结构: ${JSON.stringify(Object.keys(responseData))}`);
+            if (responseData.quote) {
+              logs.push(`[${new Date().toISOString()}] quote对象结构: ${JSON.stringify(Object.keys(responseData.quote))}`);
+            }
           } else {
             logs.push(`[${new Date().toISOString()}] 提取成功: ${mapping.targetField} = ${JSON.stringify(value)}`);
           }
@@ -1825,6 +1913,9 @@ const DataCollectionConfig: React.FC = () => {
     // 获取API响应中提取的字段值
     const extractedValues = apiResponse?.extractedFields || {};
     
+    // 调试日志，查看提取的字段值
+    console.log('提取的字段值:', extractedValues);
+    
     return (
       <FieldMappingTable>
         <thead>
@@ -1837,54 +1928,79 @@ const DataCollectionConfig: React.FC = () => {
           </tr>
         </thead>
         <tbody>
-          {currentNode.fieldMappings.map((mapping, index) => (
-            <tr key={index}>
-              <TableCell>
-                <Input
-                  value={mapping.targetField}
-                  onChange={(e) => handleFieldMappingChange(index, 'targetField', e.target.value)}
-                  placeholder="price"
-                />
-              </TableCell>
-              <TableCell>
-                <Input
-                  value={mapping.description}
-                  onChange={(e) => handleFieldMappingChange(index, 'description', e.target.value)}
-                  placeholder="价格"
-                />
-              </TableCell>
-              <TableCell>
-                <Input
-                  value={mapping.sourceField}
-                  onChange={(e) => handleFieldMappingChange(index, 'sourceField', e.target.value)}
-                  placeholder="data.result.price"
-                />
-              </TableCell>
-              <TableCell>
-                {mapping.targetField in extractedValues ? (
-                  <div style={{ 
-                    maxWidth: '200px', 
-                    overflow: 'hidden', 
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    color: extractedValues[mapping.targetField] === null ? '#FF6666' : '#66CCFF',
-                    padding: '8px 0'
-                  }}>
-                    {extractedValues[mapping.targetField] === null 
-                      ? '未找到' 
-                      : formatNumber(extractedValues[mapping.targetField], mapping.targetField)}
-                  </div>
-                ) : (
-                  <div style={{ color: '#AAAAAA', padding: '8px 0' }}>未获取</div>
-                )}
-              </TableCell>
-              <TableCell>
-                <SecondaryButton onClick={() => handleDeleteFieldMapping(index)}>
-                  删除
-                </SecondaryButton>
-              </TableCell>
-            </tr>
-          ))}
+          {currentNode.fieldMappings.map((mapping, index) => {
+            // 获取当前字段的值
+            const fieldValue = extractedValues[mapping.targetField];
+            // 调试日志，查看每个字段的值
+            console.log(`字段 ${mapping.targetField} 的值:`, fieldValue);
+            
+            return (
+              <tr key={index}>
+                <TableCell>
+                  <Input
+                    value={mapping.targetField}
+                    onChange={(e) => handleFieldMappingChange(index, 'targetField', e.target.value)}
+                    placeholder="price"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    value={mapping.description}
+                    onChange={(e) => handleFieldMappingChange(index, 'description', e.target.value)}
+                    placeholder="价格"
+                  />
+                </TableCell>
+                <TableCell>
+                  <Input
+                    value={mapping.sourceField}
+                    onChange={(e) => handleFieldMappingChange(index, 'sourceField', e.target.value)}
+                    placeholder="data.result.price"
+                  />
+                </TableCell>
+                <TableCell>
+                  {mapping.targetField in extractedValues ? (
+                    <div 
+                      style={{ 
+                        maxWidth: '200px', 
+                        overflow: 'hidden', 
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: fieldValue === null ? '#FF6666' : '#66CCFF',
+                        padding: '8px 0'
+                      }}
+                      title={
+                        fieldValue === null 
+                          ? '未找到' 
+                          : typeof fieldValue === 'object'
+                            ? JSON.stringify(fieldValue)
+                            : String(fieldValue)
+                      }
+                    >
+                      {fieldValue === null 
+                        ? '未找到' 
+                        : typeof fieldValue === 'object'
+                          ? JSON.stringify(fieldValue)
+                          : typeof fieldValue === 'boolean'
+                            ? (fieldValue ? '是' : '否')
+                            : typeof fieldValue === 'number'
+                              ? fieldValue.toLocaleString('zh-CN')
+                              : typeof fieldValue === 'string' && fieldValue.startsWith('0x')
+                                ? fieldValue // 保持十六进制格式
+                                : String(fieldValue)
+                      }
+                    </div>
+                  ) : (
+                    <div style={{ color: '#AAAAAA', padding: '8px 0' }}>未获取</div>
+                  )}
+                </TableCell>
+                <TableCell>
+                  <SecondaryButton onClick={() => handleDeleteFieldMapping(index)}>
+                    删除
+                  </SecondaryButton>
+                </TableCell>
+              </tr>
+            );
+          })}
         </tbody>
       </FieldMappingTable>
     );
@@ -2201,6 +2317,32 @@ const DataCollectionConfig: React.FC = () => {
                   <ApiResponseContent>
                     {JSON.stringify(apiResponse.extractedFields, null, 2)}
                   </ApiResponseContent>
+                  <div style={{ marginTop: '10px', color: '#F0B90B' }}>字段值详情:</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: '5px' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #444444', color: '#AAAAAA' }}>字段名</th>
+                        <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #444444', color: '#AAAAAA' }}>值</th>
+                        <th style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #444444', color: '#AAAAAA' }}>类型</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(apiResponse.extractedFields).map(([key, value], index) => (
+                        <tr key={index}>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #444444' }}>{key}</td>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #444444' }}>
+                            {value === null 
+                              ? '无数据' 
+                              : typeof value === 'object'
+                                ? JSON.stringify(value)
+                                : String(value)
+                            }
+                          </td>
+                          <td style={{ padding: '8px', borderBottom: '1px solid #444444' }}>{value === null ? 'null' : typeof value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
               
