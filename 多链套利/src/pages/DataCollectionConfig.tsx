@@ -549,6 +549,7 @@ const processCowApiPayload = (payload: string, variables: Record<string, string>
   }
 };
 
+// 修复组件类型定义
 const DataCollectionConfig: React.FC = () => {
   // 状态
   const [nodes, setNodes] = useState<DataCollectionNodeModel[]>([]);
@@ -859,6 +860,15 @@ const DataCollectionConfig: React.FC = () => {
                 // 确保地址格式正确（应该是42个字符，包括0x前缀）
                 if (value.length !== 42) {
                   logs.push(`[${new Date().toISOString()}] 警告: 地址 ${value} 长度不正确，应为42个字符（包括0x前缀）`);
+                  // 修复地址长度问题：如果长度大于42，截取前42个字符；如果小于42，使用零地址
+                  if (value.length > 42) {
+                    // 确保截取后的地址是有效的以太坊地址（20字节）
+                    value = value.substring(0, 2) + value.substring(2).substring(0, 40);
+                    logs.push(`[${new Date().toISOString()}] 自动修复: 截取地址为 ${value}`);
+                  } else {
+                    value = ethers.constants.AddressZero;
+                    logs.push(`[${new Date().toISOString()}] 自动修复: 使用零地址 ${value}`);
+                  }
                 }
                 
                 // 如果整个字符串就是变量占位符，直接返回值，避免引号问题
@@ -953,7 +963,24 @@ const DataCollectionConfig: React.FC = () => {
     }
   };
   
-  // 修复变量作用域问题
+  // 在文件顶部添加一个新的useEffect，用于在currentNode变化时检查当前选中的API
+  useEffect(() => {
+    if (currentNode && currentNode.apiId) {
+      const selectedApi = apis.find(api => api.NO === currentNode.apiId);
+      if (selectedApi) {
+        console.log(`[${new Date().toISOString()}] 当前选中的API: ${selectedApi.name}, 类型: ${selectedApi.apiType || 'HTTP'}`);
+        // 设置消息提示当前选中的API
+        setMessage({
+          text: `当前选中的API: ${selectedApi.name} (${selectedApi.apiType || 'HTTP'})`,
+          type: 'info'
+        });
+      } else {
+        console.log(`[${new Date().toISOString()}] 未找到ID为 ${currentNode.apiId} 的API`);
+      }
+    }
+  }, [currentNode, apis]);
+  
+  // 修改handleFetchApiData函数，将API调用逻辑封装成可重用的函数
   const handleFetchApiData = async () => {
     if (!currentNode.apiId) {
       setMessage({
@@ -976,338 +1003,13 @@ const DataCollectionConfig: React.FC = () => {
     try {
       setIsLoadingApi(true);
       setApiResponse(null);
-      setApiResponseError(null);
-      setLogs([]); // 清空之前的日志
       
-      const localLogs: string[] = [];
+      // 调用封装的API请求函数
+      const result = await fetchApiData(currentNode.apiId, inputVariables);
       
-      // 创建一个函数来更新日志，这样可以实时显示日志
-      const updateLogs = (newLog: string) => {
-        localLogs.push(newLog);
-        setLogs([...localLogs]); // 创建新数组以触发重新渲染
-      };
-      
-      updateLogs(`[${new Date().toISOString()}] 开始获取API数据...`);
-      
-      // 获取选中的 API 配置
-      const selectedApi = apis.find(api => api.NO === currentNode.apiId);
-      
-      if (!selectedApi) {
-        throw new Error('未找到选中的 API 配置');
-      }
-      
-      localLogs.push(`[${new Date().toISOString()}] 使用 API: ${selectedApi.name}`);
-      
-      // 构建请求参数
-      let apiUrl = selectedApi.baseUrl || '';
-      
-      // 替换URL中的变量
-      const processedApiUrl = replaceVariables(apiUrl, inputVariables, localLogs);
-      
-      // 验证 URL 格式
-      if (!processedApiUrl || !processedApiUrl.trim()) {
-        throw new Error('API URL 为空，请在 API 配置中设置有效的 baseUrl');
-      }
-      
-      try {
-        new URL(processedApiUrl);
-      } catch (e) {
-        throw new Error(`API URL 格式无效: ${processedApiUrl}`);
-      }
-      
-      let method = selectedApi.method || 'GET';
-      let headers: Record<string, string> = {};
-      let body: string | null = null;
-      let responseData: any;
-      
-      // 设置请求体（如果是POST请求）
-      if (method === 'POST') {
-        body = selectedApi.payload || '{}';
-        localLogs.push(`[${new Date().toISOString()}] 设置POST请求体: ${body}`);
-      }
-      
-      // 添加API密钥（如果有）
-      if (selectedApi.apiKey) {
-        headers['X-API-Key'] = selectedApi.apiKey;
-        localLogs.push(`[${new Date().toISOString()}] 已添加 API 密钥`);
-      }
-      
-      // 添加认证信息（如果有）
-      if (selectedApi.apiSecret) {
-        headers['Authorization'] = `Bearer ${selectedApi.apiSecret}`;
-        localLogs.push(`[${new Date().toISOString()}] 已添加认证信息`);
-      }
-      
-      // 检查是否是COW.fi API
-      const isCowApi = selectedApi.baseUrl?.includes('cow.fi') || selectedApi.baseUrl?.includes('api/v1/quote');
-      
-      if (isCowApi) {
-        localLogs.push(`[${new Date().toISOString()}] 检测到COW.fi API，使用专门的处理函数...`);
-        
-        try {
-          // 确保有请求体
-          if (!body || body === '{}') {
-            logs.push(`[${new Date().toISOString()}] 警告: COW.fi API请求体为空，创建默认请求体`);
-            body = JSON.stringify({
-              sellToken: inputVariables['sellToken'] || '0x0000000000000000000000000000000000000000',
-              buyToken: inputVariables['buyToken'] || '0x0000000000000000000000000000000000000000',
-              from: inputVariables['from'] || '0x0000000000000000000000000000000000000000',
-              receiver: inputVariables['receiver'] || '0x0000000000000000000000000000000000000000',
-              appData: '0x0000000000000000000000000000000000000000000000000000000000000000',
-              validTo: Math.floor(Date.now() / 1000) + 3600,
-              sellAmountBeforeFee: inputVariables['sellAmountBeforeFee'] || '1000000000000000000'
-            });
-            logs.push(`[${new Date().toISOString()}] 创建的默认请求体: ${body}`);
-          }
-          
-          // 先解析JSON，确保格式正确
-          const jsonObj = JSON.parse(body);
-          
-          // 记录原始字段值
-          if (jsonObj.sellToken) {
-            logs.push(`[${new Date().toISOString()}] 原始sellToken: ${jsonObj.sellToken}`);
-          }
-          
-          // 使用专门的处理函数
-          body = processCowApiPayload(body, inputVariables, logs);
-          logs.push(`[${new Date().toISOString()}] COW.fi专用处理后的Payload: ${body}`);
-          
-          // 再次解析，检查处理后的字段值
-          const processedObj = JSON.parse(body);
-          
-          // 检查并添加必要字段
-          const requiredFields = ['from', 'sellToken', 'buyToken', 'receiver', 'appData'];
-          const missingFields = requiredFields.filter(field => !processedObj[field]);
-          
-          if (missingFields.length > 0) {
-            logs.push(`[${new Date().toISOString()}] 警告: COW.fi API缺少必要字段: ${missingFields.join(', ')}`);
-            
-            // 添加缺失的字段
-            if (!processedObj.from) {
-              processedObj.from = processedObj.receiver || '0x0000000000000000000000000000000000000000';
-              logs.push(`[${new Date().toISOString()}] 已添加from字段: ${processedObj.from}`);
-            }
-            
-            if (!processedObj.receiver) {
-              processedObj.receiver = processedObj.from || '0x0000000000000000000000000000000000000000';
-              logs.push(`[${new Date().toISOString()}] 已添加receiver字段: ${processedObj.receiver}`);
-            }
-            
-            if (!processedObj.appData) {
-              processedObj.appData = '0x0000000000000000000000000000000000000000000000000000000000000000';
-              logs.push(`[${new Date().toISOString()}] 已添加appData字段: ${processedObj.appData}`);
-            }
-          }
-          
-          // 确保sellToken不包含引号
-          if (typeof processedObj.sellToken === 'string' && processedObj.sellToken.includes('"')) {
-            logs.push(`[${new Date().toISOString()}] 警告: sellToken仍然包含引号，尝试修复...`);
-            processedObj.sellToken = processedObj.sellToken.replace(/"/g, '');
-            body = JSON.stringify(processedObj);
-            logs.push(`[${new Date().toISOString()}] 修复后的Payload: ${body}`);
-          }
-          
-          logs.push(`[${new Date().toISOString()}] 最终COW.fi请求体: ${body}`);
-        } catch (error) {
-          logs.push(`[${new Date().toISOString()}] 警告: 处理COW.fi API请求时出错: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      } else {
-        // 使用通用变量替换
-        body = replaceVariables(body || '{}', inputVariables, logs);
-        logs.push(`[${new Date().toISOString()}] 替换变量后的Payload: ${body}`);
-      }
-      
-      // 处理自定义变量（保留原有逻辑，但变量已在上面替换）
-      if (selectedApi.customVariables) {
-        logs.push(`[${new Date().toISOString()}] API配置中包含自定义变量，但已被用户输入的变量替换`);
-      }
-      
-      headers['Content-Type'] = 'application/json';
-      logs.push(`[${new Date().toISOString()}] 已设置 Content-Type: application/json`);
-      logs.push(`[${new Date().toISOString()}] 最终请求体: ${body}`);
-      
-      // 详细记录请求信息
-      logs.push(`[${new Date().toISOString()}] 请求URL: ${processedApiUrl}`);
-      logs.push(`[${new Date().toISOString()}] 请求方法: ${method}`);
-      logs.push(`[${new Date().toISOString()}] 请求头: ${JSON.stringify(headers, null, 2)}`);
-      
-      // 详细记录请求体
-      if (body) {
-        logs.push(`[${new Date().toISOString()}] 请求体(原始): ${body}`);
-        try {
-          // 尝试解析JSON以更好地显示
-          const bodyObj = JSON.parse(body);
-          logs.push(`[${new Date().toISOString()}] 请求体(解析后): ${JSON.stringify(bodyObj, null, 2)}`);
-          
-          // 检查是否缺少必要字段
-          if (processedApiUrl.includes('cow.fi') || processedApiUrl.includes('api/v1/quote')) {
-            logs.push(`[${new Date().toISOString()}] 检测到COW.fi API，检查必要字段...`);
-            const requiredFields = ['from', 'sellToken', 'buyToken', 'receiver', 'appData'];
-            const missingFields = requiredFields.filter(field => !bodyObj[field]);
-            
-            if (missingFields.length > 0) {
-              logs.push(`[${new Date().toISOString()}] 警告: 缺少必要字段: ${missingFields.join(', ')}`);
-              
-              // 尝试修复缺失的字段
-              if (missingFields.includes('from') && !bodyObj.from) {
-                logs.push(`[${new Date().toISOString()}] 尝试添加缺失的from字段...`);
-                bodyObj.from = bodyObj.receiver || '0x0000000000000000000000000000000000000000';
-                logs.push(`[${new Date().toISOString()}] 已添加from字段: ${bodyObj.from}`);
-              }
-              
-              if (missingFields.includes('receiver') && !bodyObj.receiver) {
-                logs.push(`[${new Date().toISOString()}] 尝试添加缺失的receiver字段...`);
-                bodyObj.receiver = bodyObj.from || '0x0000000000000000000000000000000000000000';
-                logs.push(`[${new Date().toISOString()}] 已添加receiver字段: ${bodyObj.receiver}`);
-              }
-              
-              if (missingFields.includes('appData') && !bodyObj.appData) {
-                logs.push(`[${new Date().toISOString()}] 尝试添加缺失的appData字段...`);
-                bodyObj.appData = '0x0000000000000000000000000000000000000000000000000000000000000000';
-                logs.push(`[${new Date().toISOString()}] 已添加appData字段: ${bodyObj.appData}`);
-              }
-            }
-            
-            // 确保只使用validTo或validFor中的一个，不能同时使用两个
-            if (bodyObj.validTo && bodyObj.validFor) {
-              logs.push(`[${new Date().toISOString()}] 警告: 同时存在validTo和validFor字段，移除validFor字段`);
-              delete bodyObj.validFor;
-            }
-            
-            // 如果两者都不存在，添加validTo
-            if (!bodyObj.validTo && !bodyObj.validFor) {
-              // 设置为当前时间后1小时（以秒为单位的时间戳）
-              bodyObj.validTo = Math.floor(Date.now() / 1000) + 3600;
-              logs.push(`[${new Date().toISOString()}] 已添加validTo字段: ${bodyObj.validTo}`);
-            }
-            
-            // 更新body
-            body = JSON.stringify(bodyObj);
-            logs.push(`[${new Date().toISOString()}] 修复后的请求体: ${body}`);
-          }
-        } catch (e) {
-          logs.push(`[${new Date().toISOString()}] 请求体不是有效的JSON: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      } else {
-        logs.push(`[${new Date().toISOString()}] 请求体为空`);
-      }
-      
-      logs.push(`[${new Date().toISOString()}] 发送请求...`);
-      
-      // 实际发送API请求
-      try {
-        // 检查是否在 TamperMonkey 环境中
-        const isTM = isTamperMonkeyEnvironment();
-        if (isTM) {
-          logs.push(`[${new Date().toISOString()}] 检测到 TamperMonkey 环境，使用 GM_xmlhttpRequest 发送请求`);
-        } else {
-          logs.push(`[${new Date().toISOString()}] 未检测到 TamperMonkey 环境，将使用 fetch API 或代理服务`);
-        }
-        
-        // 使用工具函数发送请求
-        const startTime = Date.now();
-        logs.push(`[${new Date().toISOString()}] 最终发送的请求体: ${body || '空'}`);
-        
-        // 确保POST请求有请求体
-        if (method === 'POST' && (!body || body === '{}')) {
-          logs.push(`[${new Date().toISOString()}] 警告: POST请求的请求体为空，将使用空对象`);
-          body = '{}';
-        }
-        
-        responseData = await sendRequest(
-          processedApiUrl,
-          method as 'GET' | 'POST',
-          headers,
-          body,
-          30000 // 30秒超时
-        );
-        const endTime = Date.now();
-        
-        logs.push(`[${new Date().toISOString()}] 请求完成，耗时 ${endTime - startTime}ms`);
-        
-        // 检查响应数据
-        if (responseData === null || responseData === undefined) {
-          logs.push(`[${new Date().toISOString()}] 警告: 响应数据为空`);
-          responseData = {};
-        } else if (typeof responseData === 'string' && responseData.trim() === '') {
-          logs.push(`[${new Date().toISOString()}] 警告: 响应数据为空字符串`);
-          responseData = {};
-        }
-        
-        logs.push(`[${new Date().toISOString()}] 响应数据类型: ${typeof responseData}`);
-        logs.push(`[${new Date().toISOString()}] 响应数据: ${JSON.stringify(responseData, null, 2)}`);
-      } catch (error) {
-        logs.push(`[${new Date().toISOString()}] 请求失败: ${error instanceof Error ? error.message : String(error)}`);
-        throw error;
-      }
-      
-      logs.push(`[${new Date().toISOString()}] 开始提取字段...`);
-      
-      // 提取字段
-      const extractedData: Record<string, any> = {};
-      currentNode.fieldMappings.forEach(mapping => {
-        logs.push(`[${new Date().toISOString()}] 提取字段: ${mapping.sourceField} -> ${mapping.targetField}`);
-        
-        try {
-          // 从嵌套对象中获取值
-          let value = getNestedValue(responseData, mapping.sourceField);
-          
-          // 如果值为undefined，尝试其他可能的路径
-          if (value === undefined) {
-            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，尝试其他可能的路径...`);
-            
-            // 尝试直接从顶层对象获取
-            if (responseData[mapping.targetField] !== undefined) {
-              value = responseData[mapping.targetField];
-              logs.push(`[${new Date().toISOString()}] 从顶层对象找到字段 ${mapping.targetField}`);
-            }
-            
-            // 尝试从quote对象获取
-            else if (responseData.quote && responseData.quote[mapping.targetField] !== undefined) {
-              value = responseData.quote[mapping.targetField];
-              logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${mapping.targetField}`);
-            }
-            
-            // 尝试从quote对象获取，使用sourceField的最后一部分
-            else if (responseData.quote) {
-              const lastPart = mapping.sourceField.split('.').pop();
-              if (lastPart && responseData.quote[lastPart] !== undefined) {
-                value = responseData.quote[lastPart];
-                logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${lastPart}`);
-              }
-            }
-          }
-          
-          extractedData[mapping.targetField] = value;
-          
-          if (value === undefined) {
-            logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，所有尝试都失败了`);
-            // 打印响应数据的结构，帮助调试
-            logs.push(`[${new Date().toISOString()}] 响应数据结构: ${JSON.stringify(Object.keys(responseData))}`);
-            if (responseData.quote) {
-              logs.push(`[${new Date().toISOString()}] quote对象结构: ${JSON.stringify(Object.keys(responseData.quote))}`);
-            }
-          } else {
-            logs.push(`[${new Date().toISOString()}] 提取成功: ${mapping.targetField} = ${JSON.stringify(value)}`);
-          }
-        } catch (error) {
-          logs.push(`[${new Date().toISOString()}] 提取失败: ${error instanceof Error ? error.message : String(error)}`);
-          extractedData[mapping.targetField] = null;
-        }
-      });
-      
-      logs.push(`[${new Date().toISOString()}] 字段提取完成`);
-      logs.push(`[${new Date().toISOString()}] API调用完成`);
-      
-      // 更新API响应状态
-      setApiResponse({
-        success: true,
-        message: '获取数据成功',
-        data: responseData,
-        logs,
-        extractedFields: extractedData
-      });
-    } catch (error: any) { // 添加类型注解
+      // 处理返回结果
+      setApiResponse(result);
+    } catch (error: any) {
       console.error('获取API数据失败:', error);
       
       setApiResponse({
@@ -1321,19 +1023,518 @@ const DataCollectionConfig: React.FC = () => {
         text: `获取数据失败: ${error instanceof Error ? error.message : String(error)}`,
         type: 'error'
       });
-      
-      // 设置错误信息和日志
-      if (typeof setApiResponseError === 'function') {
-        setApiResponseError(error instanceof Error ? error.message : String(error));
-      }
-      
-      if (logs && Array.isArray(logs)) {
-        logs.push(`[${new Date().toISOString()}] 错误: ${error instanceof Error ? error.message : String(error)}`);
-      }
     } finally {
       setIsLoadingApi(false);
-      setLogs(logs); // 设置日志
     }
+  };
+  
+  // 修复fetchHttpData函数相关错误，确保函数已声明并正确引用
+  const fetchApiData = async (apiId: number, variables: Record<string, string>): Promise<ApiResponse> => {
+    const logs: string[] = [];
+    logs.push(`[${new Date().toISOString()}] 开始获取API数据...`);
+    
+    // 获取选中的 API 配置
+    const selectedApi = apis.find(api => api.NO === apiId);
+    if (!selectedApi) {
+      throw new Error(`未找到ID为 ${apiId} 的API`);
+    }
+    
+    logs.push(`[${new Date().toISOString()}] 使用 API: ${selectedApi.name}`);
+    
+    // 处理链上数据类型的API
+    if (selectedApi.apiType === 'CHAIN') {
+      return await fetchChainData(selectedApi, variables, logs);
+    } else {
+      // 处理HTTP类型的API
+      return await fetchHttpData(selectedApi, variables, logs);
+    }
+  };
+  
+  // 封装链上数据请求函数
+  const fetchChainData = async (selectedApi: ApiConfigModel, variables: Record<string, string>, logs: string[]): Promise<ApiResponse> => {
+    logs.push(`[${new Date().toISOString()}] 检测到链上数据类型API，准备调用智能合约`);
+    
+    // 验证必要参数
+    if (!selectedApi.chainId) {
+      throw new Error('未设置链ID，请在API配置中设置chainId');
+    }
+    
+    if (!selectedApi.contractAddress) {
+      throw new Error('未设置合约地址，请在API配置中设置contractAddress');
+    }
+    
+    if (!selectedApi.methodName) {
+      throw new Error('未设置方法名称，请在API配置中设置methodName');
+    }
+    
+    // 查找选中的链
+    const allChains = await chainConfigAccess.getAll();
+    const selectedChain = allChains.find(chain => chain.chainId === selectedApi.chainId);
+    if (!selectedChain || !selectedChain.rpcUrls || selectedChain.rpcUrls.length === 0) {
+      throw new Error(`找不到链ID为 ${selectedApi.chainId} 的RPC URL`);
+    }
+    
+    const rpcUrl = selectedChain.rpcUrls[0];
+    logs.push(`[${new Date().toISOString()}] 使用RPC URL: ${rpcUrl}`);
+    
+    // 使用ethers.js连接到区块链
+    logs.push(`[${new Date().toISOString()}] 正在连接到区块链...`);
+    const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+    
+    try {
+      // 检查连接
+      logs.push(`[${new Date().toISOString()}] 正在检查区块链连接...`);
+      const blockNumber = await provider.getBlockNumber();
+      logs.push(`[${new Date().toISOString()}] 连接成功，当前区块高度: ${blockNumber}`);
+    } catch (error) {
+      logs.push(`[${new Date().toISOString()}] 连接失败: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`连接到区块链失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    // 检查合约地址是否有效
+    logs.push(`[${new Date().toISOString()}] 正在验证合约地址...`);
+    if (!ethers.utils.isAddress(selectedApi.contractAddress)) {
+      logs.push(`[${new Date().toISOString()}] 合约地址无效: ${selectedApi.contractAddress}`);
+      throw new Error(`合约地址无效: ${selectedApi.contractAddress}`);
+    }
+    
+    logs.push(`[${new Date().toISOString()}] 正在获取合约代码...`);
+    const code = await provider.getCode(selectedApi.contractAddress);
+    if (code === '0x') {
+      logs.push(`[${new Date().toISOString()}] 地址 ${selectedApi.contractAddress} 不是合约地址`);
+      throw new Error(`地址 ${selectedApi.contractAddress} 不是合约地址`);
+    }
+    
+    logs.push(`[${new Date().toISOString()}] 合约代码长度: ${code.length} 字节`);
+    
+    // 准备方法参数
+    const methodParams = selectedApi.methodParams || [];
+    const params = methodParams.map(param => {
+      // 替换变量
+      let value = param.value || '';
+      if (value.includes('(') && value.includes(')')) {
+        // 提取变量名
+        const variableName = value.match(/\(([^()]+)\)/)?.[1];
+        if (variableName && variables[variableName]) {
+          value = value.replace(`(${variableName})`, variables[variableName]);
+        }
+      }
+      
+      // 根据参数类型转换值
+      if (param.type.includes('int')) {
+        // 对于整数类型，尝试转换为数字
+        return ethers.BigNumber.from(value || '0');
+      } else if (param.type === 'address') {
+        // 对于地址类型，确保是有效的地址
+        if (!value || !ethers.utils.isAddress(value)) {
+          // 检查是否是长度问题（地址应该是42个字符，包括0x前缀）
+          if (value && value.startsWith('0x') && /^0x[0-9a-fA-F]+$/.test(value)) {
+            if (value.length !== 42) {
+              logs.push(`[${new Date().toISOString()}] 警告: 地址参数 ${param.name} 长度不正确 (${value.length})，应为42个字符`);
+              // 修复：清理地址字符串，移除任何额外的空格和字符
+              value = value.trim();
+              // 如果长度大于42，截取正确长度
+              if (value.length > 42) {
+                value = value.substring(0, 2) + value.substring(2).substring(0, 40);
+                logs.push(`[${new Date().toISOString()}] 自动修复: 截取地址为 ${value}`);
+              }
+              // 如果长度小于42但大于2，补齐
+              else if (value.length > 2 && value.length < 42) {
+                // 在末尾补0
+                value = value.padEnd(42, '0');
+                logs.push(`[${new Date().toISOString()}] 自动修复: 补齐地址为 ${value}`);
+              }
+              // 再次验证修复后的地址
+              if (!ethers.utils.isAddress(value)) {
+                logs.push(`[${new Date().toISOString()}] 警告: 修复后的地址仍然无效，使用零地址代替`);
+                return ethers.constants.AddressZero;
+              }
+              return value;
+            }
+          }
+          logs.push(`[${new Date().toISOString()}] 警告: 参数 ${param.name} 不是有效的地址，使用零地址代替`);
+          return ethers.constants.AddressZero;
+        }
+        return value;
+      } else if (param.type === 'bool') {
+        // 对于布尔类型，转换为布尔值
+        return value.toLowerCase() === 'true';
+      } else {
+        // 其他类型，如字符串，直接使用
+        return value;
+      }
+    });
+    
+    logs.push(`[${new Date().toISOString()}] 方法参数准备完成: ${JSON.stringify(params.map(p => p.toString()))}`);
+    
+    // 创建接口和合约实例
+    logs.push(`[${new Date().toISOString()}] 正在创建合约实例...`);
+    
+    // 常见的只读方法列表
+    const commonViewMethods = [
+      'name', 'symbol', 'decimals', 'totalSupply', 'balanceOf', 'allowance',
+      'getOwner', 'owner', 'implementation', 'getImplementation',
+      // ERC4626只读方法
+      'asset', 'totalAssets', 'convertToShares', 'convertToAssets',
+      'maxDeposit', 'previewDeposit', 'maxMint', 'previewMint',
+      'maxWithdraw', 'previewWithdraw', 'maxRedeem', 'previewRedeem'
+    ];
+    
+    // 构建方法签名
+    let methodSignature: string;
+    
+    // 使用更健壮的方式构建方法签名，直接使用ethers.js支持的格式
+    try {
+      // 简化的方法签名，ethers.js使用的格式
+      methodSignature = `${selectedApi.methodName}(`;
+      methodParams.forEach((param, index) => {
+        methodSignature += `${param.type}`;
+        if (index < methodParams.length - 1) {
+          methodSignature += ',';
+        }
+      });
+      methodSignature += `)`;
+      
+      // 添加返回类型（如果有）
+      // 注意：API配置中可能没有methodReturnType字段，使用默认值
+      const returnType = (selectedApi as any).methodReturnType || 'uint256';
+      methodSignature += ` returns (${returnType})`;
+    
+      logs.push(`[${new Date().toISOString()}] 方法签名: ${methodSignature}`);
+    } catch (error) {
+      logs.push(`[${new Date().toISOString()}] 构建方法签名出错: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`构建方法签名出错: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    
+    try {
+      // 特殊处理ERC4626方法，使用预定义的接口
+      if (commonViewMethods.includes(selectedApi.methodName)) {
+        logs.push(`[${new Date().toISOString()}] 使用预定义接口调用常见方法: ${selectedApi.methodName}`);
+        
+        // 获取接口定义
+        let abi = [`function ${selectedApi.methodName}(`];
+        
+        // 添加参数
+        methodParams.forEach((param, index) => {
+          abi[0] += `${param.type}`;
+          if (index < methodParams.length - 1) {
+            abi[0] += ', ';
+          }
+        });
+        
+        // 添加返回类型和view修饰符
+        abi[0] += `) view returns (${(selectedApi as any).methodReturnType || 'uint256'})`;
+        
+        logs.push(`[${new Date().toISOString()}] 使用ABI: ${abi[0]}`);
+        
+        // 创建接口
+        const iface = new ethers.utils.Interface(abi);
+        
+        // 创建合约实例
+        const contract = new ethers.Contract(selectedApi.contractAddress, iface, provider);
+        
+        // 调用合约方法
+        logs.push(`[${new Date().toISOString()}] 正在调用合约方法 ${selectedApi.methodName}...`);
+        const startTime = Date.now();
+        
+        // 检查方法是否是只读方法
+        const isReadOnly = methodSignature.includes('view') || methodSignature.includes('pure') || commonViewMethods.includes(selectedApi.methodName);
+        logs.push(`[${new Date().toISOString()}] 方法类型: ${isReadOnly ? '只读方法' : '需要签名的方法'}`);
+        
+        let result;
+        try {
+          // 使用callStatic来调用所有方法，避免需要签名者
+          result = await contract.callStatic[selectedApi.methodName](...params);
+          logs.push(`[${new Date().toISOString()}] 调用成功，耗时: ${Date.now() - startTime}ms`);
+          logs.push(`[${new Date().toISOString()}] 返回结果: ${JSON.stringify(result)}`);
+          
+          // 将结果转换为可用的格式
+          let responseData = result;
+          
+          // 如果结果是BigNumber，添加十六进制和格式化的值
+          if (ethers.BigNumber.isBigNumber(result)) {
+            responseData = {
+              hex: result.toHexString(),
+              decimal: result.toString(),
+              formatted: ethers.utils.formatUnits(result, 18) // 默认使用18位小数，可以根据需要调整
+            };
+            logs.push(`[${new Date().toISOString()}] 结果是BigNumber，已转换为多种格式`);
+          }
+          
+          // 提取字段
+          const extractedFields = extractFields(responseData, currentNode.fieldMappings, logs);
+          
+          return {
+            success: true,
+            message: '获取数据成功',
+            data: responseData,
+            logs,
+            extractedFields
+          };
+        } catch (callError) {
+          logs.push(`[${new Date().toISOString()}] 调用失败: ${callError instanceof Error ? callError.message : String(callError)}`);
+          throw new Error(`调用失败: ${callError instanceof Error ? callError.message : String(callError)}`);
+        }
+      } else {
+        // 对于其他方法，使用更复杂的签名方式
+        logs.push(`[${new Date().toISOString()}] 使用更复杂的签名方式: ${selectedApi.methodName}`);
+        
+        // 构建方法签名
+        let methodSignature = `function ${selectedApi.methodName}(`;
+        methodParams.forEach((param, index) => {
+          methodSignature += `${param.type} ${param.name || ''}`;
+          if (index < methodParams.length - 1) {
+            methodSignature += ', ';
+          }
+        });
+        methodSignature += ')';
+        
+        // 添加返回类型（如果有）
+        // 注意：API配置中可能没有methodReturnType字段，使用默认值
+        const returnType = (selectedApi as any).methodReturnType || 'uint256';
+        methodSignature += ` returns (${returnType})`;
+        
+        logs.push(`[${new Date().toISOString()}] 方法签名: ${methodSignature}`);
+        
+        try {
+          // 创建接口
+          const iface = new ethers.utils.Interface([methodSignature]);
+          
+          // 创建合约实例
+          const contract = new ethers.Contract(selectedApi.contractAddress, iface, provider);
+          
+          // 调用合约方法
+          logs.push(`[${new Date().toISOString()}] 正在调用合约方法 ${selectedApi.methodName}...`);
+          const startTime = Date.now();
+          
+          // 检查方法是否是只读方法
+          const isReadOnly = methodSignature.includes('view') || methodSignature.includes('pure') || commonViewMethods.includes(selectedApi.methodName);
+          logs.push(`[${new Date().toISOString()}] 方法类型: ${isReadOnly ? '只读方法' : '需要签名的方法'}`);
+          
+          let result;
+          try {
+            // 使用callStatic来调用所有方法，避免需要签名者
+            result = await contract.callStatic[selectedApi.methodName](...params);
+            logs.push(`[${new Date().toISOString()}] 调用成功，耗时: ${Date.now() - startTime}ms`);
+            logs.push(`[${new Date().toISOString()}] 返回结果: ${JSON.stringify(result)}`);
+            
+            // 将结果转换为可用的格式
+            let responseData = result;
+            
+            // 如果结果是BigNumber，添加十六进制和格式化的值
+            if (ethers.BigNumber.isBigNumber(result)) {
+              responseData = {
+                hex: result.toHexString(),
+                decimal: result.toString(),
+                formatted: ethers.utils.formatUnits(result, 18) // 默认使用18位小数，可以根据需要调整
+              };
+              logs.push(`[${new Date().toISOString()}] 结果是BigNumber，已转换为多种格式`);
+            }
+            
+            // 提取字段
+            const extractedFields = extractFields(responseData, currentNode.fieldMappings, logs);
+            
+            return {
+              success: true,
+              message: '获取数据成功',
+              data: responseData,
+              logs,
+              extractedFields
+            };
+          } catch (callError) {
+            logs.push(`[${new Date().toISOString()}] 调用失败: ${callError instanceof Error ? callError.message : String(callError)}`);
+            throw new Error(`调用失败: ${callError instanceof Error ? callError.message : String(callError)}`);
+          }
+        } catch (error) {
+          logs.push(`[${new Date().toISOString()}] 创建合约实例或调用方法失败: ${error instanceof Error ? error.message : String(error)}`);
+          throw error;
+        }
+      }
+    } catch (error) {
+      logs.push(`[${new Date().toISOString()}] 创建合约实例或调用方法失败: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
+  };
+  
+  // 封装HTTP数据请求函数
+  const fetchHttpData = async (selectedApi: ApiConfigModel, variables: Record<string, string>, logs: string[]): Promise<ApiResponse> => {
+    // 构建请求参数
+    let apiUrl = selectedApi.baseUrl || '';
+    
+    // 替换URL中的变量
+    const processedApiUrl = replaceVariables(apiUrl, variables, logs);
+    
+    // 验证 URL 格式
+    if (!processedApiUrl.startsWith('http://') && !processedApiUrl.startsWith('https://')) {
+      logs.push(`[${new Date().toISOString()}] 警告: URL 格式不正确: ${processedApiUrl}`);
+      throw new Error(`URL 格式不正确: ${processedApiUrl}`);
+    }
+    
+    let method = selectedApi.method || 'GET';
+    let headers: Record<string, string> = {};
+    let body: string | null = null;
+    
+    // 设置请求体（如果是POST请求）
+    if (method === 'POST') {
+      body = selectedApi.payload || '{}';
+      logs.push(`[${new Date().toISOString()}] 设置POST请求体: ${body}`);
+    }
+    
+    // 添加API密钥（如果有）
+    if (selectedApi.apiKey) {
+      headers['X-API-Key'] = selectedApi.apiKey;
+      logs.push(`[${new Date().toISOString()}] 已添加 API 密钥`);
+    }
+    
+    // 添加认证信息（如果有）
+    if (selectedApi.apiSecret) {
+      headers['Authorization'] = `Bearer ${selectedApi.apiSecret}`;
+      logs.push(`[${new Date().toISOString()}] 已添加认证信息`);
+    }
+    
+    // 添加内容类型（如果是POST请求）
+    if (method === 'POST') {
+      headers['Content-Type'] = 'application/json';
+      logs.push(`[${new Date().toISOString()}] 已添加 Content-Type: application/json`);
+    }
+    
+    // 检测是否是COW.fi API
+    const isCowApi = processedApiUrl.includes('cow.fi') || processedApiUrl.includes('api/v1/quote');
+    
+    if (isCowApi && body) {
+      // 特殊处理COW.fi API的请求体
+      body = processCowApiPayload(body, variables, logs);
+    }
+    
+    // 发送请求
+    logs.push(`[${new Date().toISOString()}] 发送${method}请求到: ${processedApiUrl}`);
+    
+    try {
+      // 无论是否在TamperMonkey环境中，都直接使用sendRequest函数或原生fetch
+      // 因为用户已经使用了CORS unblock插件，不需要代理
+      logs.push(`[${new Date().toISOString()}] 使用直接请求模式...`);
+      
+      let responseData;
+      
+      if (typeof sendRequest === 'function') {
+        // 尝试使用项目中已有的sendRequest函数
+        logs.push(`[${new Date().toISOString()}] 使用sendRequest函数`);
+        responseData = await sendRequest(
+          processedApiUrl,
+          method as 'GET' | 'POST',
+          headers,
+          body,
+          30000 // 超时时间，默认30秒
+        );
+      } else {
+        // 使用原生fetch API
+        logs.push(`[${new Date().toISOString()}] 使用fetch API`);
+        
+        const fetchOptions: RequestInit = {
+          method: method,
+          headers: headers,
+          body: (method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') ? (body || undefined) : undefined
+        };
+        
+        const response = await fetch(processedApiUrl, fetchOptions);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          logs.push(`[${new Date().toISOString()}] 请求失败: ${response.status} ${response.statusText}`);
+          logs.push(`[${new Date().toISOString()}] 错误详情: ${errorText}`);
+          throw new Error(`请求失败: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        
+        // 尝试解析响应为JSON
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          const text = await response.text();
+          try {
+            responseData = JSON.parse(text);
+          } catch (e) {
+            responseData = { text };
+          }
+        }
+      }
+      
+      logs.push(`[${new Date().toISOString()}] 请求成功，处理响应...`);
+      
+      // 提取字段
+      const extractedFields = extractFields(responseData, currentNode.fieldMappings, logs);
+      
+      return {
+        success: true,
+        message: '获取数据成功',
+        data: responseData,
+        logs,
+        extractedFields
+      };
+    } catch (error) {
+      logs.push(`[${new Date().toISOString()}] 请求失败: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(`请求失败: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+  
+  // 封装字段提取函数
+  const extractFields = (responseData: any, fieldMappings: FieldMapping[], logs: string[]): Record<string, any> => {
+    logs.push(`[${new Date().toISOString()}] 开始提取字段...`);
+    
+    // 提取字段
+    const extractedData: Record<string, any> = {};
+    fieldMappings.forEach(mapping => {
+      logs.push(`[${new Date().toISOString()}] 提取字段: ${mapping.sourceField} -> ${mapping.targetField}`);
+      
+      try {
+        // 从嵌套对象中获取值
+        let value = getNestedValue(responseData, mapping.sourceField);
+        
+        // 如果值为undefined，尝试其他可能的路径
+        if (value === undefined) {
+          logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，尝试其他可能的路径...`);
+          
+          // 尝试直接从顶层对象获取
+          if (responseData[mapping.targetField] !== undefined) {
+            value = responseData[mapping.targetField];
+            logs.push(`[${new Date().toISOString()}] 从顶层对象找到字段 ${mapping.targetField}`);
+          }
+          
+          // 尝试从quote对象获取
+          else if (responseData.quote && responseData.quote[mapping.targetField] !== undefined) {
+            value = responseData.quote[mapping.targetField];
+            logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${mapping.targetField}`);
+          }
+          
+          // 尝试从quote对象获取，使用sourceField的最后一部分
+          else if (responseData.quote) {
+            const lastPart = mapping.sourceField.split('.').pop();
+            if (lastPart && responseData.quote[lastPart] !== undefined) {
+              value = responseData.quote[lastPart];
+              logs.push(`[${new Date().toISOString()}] 从quote对象找到字段 ${lastPart}`);
+            }
+          }
+        }
+        
+        extractedData[mapping.targetField] = value;
+        
+        if (value === undefined) {
+          logs.push(`[${new Date().toISOString()}] 警告: 字段 ${mapping.sourceField} 在响应数据中不存在，所有尝试都失败了`);
+          // 打印响应数据的结构，帮助调试
+          logs.push(`[${new Date().toISOString()}] 响应数据结构: ${JSON.stringify(Object.keys(responseData))}`);
+          if (responseData.quote) {
+            logs.push(`[${new Date().toISOString()}] quote对象结构: ${JSON.stringify(Object.keys(responseData.quote))}`);
+          }
+        } else {
+          logs.push(`[${new Date().toISOString()}] 提取成功: ${mapping.targetField} = ${JSON.stringify(value)}`);
+        }
+      } catch (error) {
+        logs.push(`[${new Date().toISOString()}] 提取失败: ${error instanceof Error ? error.message : String(error)}`);
+        extractedData[mapping.targetField] = null;
+      }
+    });
+    
+    return extractedData;
   };
   
   // 从嵌套对象中获取值
@@ -2417,4 +2618,4 @@ const DataCollectionConfig: React.FC = () => {
   );
 };
 
-export default DataCollectionConfig; 
+export default DataCollectionConfig;

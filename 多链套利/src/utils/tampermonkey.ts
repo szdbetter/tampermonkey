@@ -280,9 +280,14 @@ export const sendRequest = (
 };
 
 /**
- * 检查是否在 TamperMonkey 环境中运行
- * @returns boolean
+ * 检查是否在TamperMonkey环境中运行
+ * @returns {boolean} 是否在TamperMonkey环境中
  */
 export const isTamperMonkeyEnvironment = (): boolean => {
-  return typeof GM_info !== 'undefined';
+  // 由于使用了CORS unblock插件，我们可以直接返回true
+  // 这样就会使用直接请求而不是代理
+  return true;
+  
+  // 原始检测代码（注释掉）
+  // return typeof GM_info !== 'undefined' && typeof GM_xmlhttpRequest !== 'undefined';
 }; 
