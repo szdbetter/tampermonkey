@@ -290,4 +290,4 @@ export const isTamperMonkeyEnvironment = (): boolean => {
   
   // 原始检测代码（注释掉）
   // return typeof GM_info !== 'undefined' && typeof GM_xmlhttpRequest !== 'undefined';
-}; 
+}; // 添加注释 2025年 3月18日 星期二 17时44分16秒 CST
