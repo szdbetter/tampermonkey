@@ -251,6 +251,7 @@ export interface ExchangeConfigModel {
 export interface ApiConfigModel {
   NO?: number;
   name: string;               // API名称
+  apiType?: 'HTTP' | 'CHAIN'; // API类型：HTTP或链上数据，默认为HTTP
   baseUrl: string;            // API基础URL
   method: 'GET' | 'POST';     // 请求方法
   payload?: string;           // POST请求的负载数据
@@ -266,6 +267,16 @@ export interface ApiConfigModel {
   customVariables?: {         // 自定义变量值（可选）
     [key: string]: string;    // 变量名: 变量值
   };
+  // 链上数据特有字段
+  chainId?: number;           // 链ID
+  contractAddress?: string;   // 合约地址
+  methodName?: string;        // 方法名称
+  methodParams?: {            // 方法参数
+    name: string;             // 参数名称
+    type: string;             // 参数类型
+    value?: string;           // 参数值
+  }[];
+  isProxyContract?: boolean;  // 是否为代理合约
   create_time?: string;       // 创建时间
 }
 

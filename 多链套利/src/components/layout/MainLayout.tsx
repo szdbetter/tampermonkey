@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet } from 'react-router-dom';
 import styled from 'styled-components';
 import Header from './Header';
@@ -114,7 +114,23 @@ const Version = styled.div`
   color: #666666;
 `;
 
-const MainLayout: React.FC = () => {
+const MainLayout = () => {
+  const [lastUpdateTime, setLastUpdateTime] = useState<string>('');
+  
+  useEffect(() => {
+    const now = new Date();
+    const formattedTime = now.toLocaleString('zh-CN');
+    setLastUpdateTime(formattedTime);
+    
+    const timer = setInterval(() => {
+      const now = new Date();
+      const formattedTime = now.toLocaleString('zh-CN');
+      setLastUpdateTime(formattedTime);
+    }, 60000);
+    
+    return () => clearInterval(timer);
+  }, []);
+  
   return (
     <LayoutContainer>
       <Header />
@@ -129,7 +145,7 @@ const MainLayout: React.FC = () => {
           </TabBar>
           <StatusBar>
             <StatusTitle>监控仪表板</StatusTitle>
-            <LastUpdate>最后更新: 2023-07-15 14:30:22</LastUpdate>
+            <LastUpdate>最后更新: {lastUpdateTime}</LastUpdate>
           </StatusBar>
           <DashboardContent>
             <Outlet />
@@ -138,16 +154,11 @@ const MainLayout: React.FC = () => {
             <div style={{ display: 'flex' }}>
               <StatusItem>
                 <StatusLight status="active" />
-                系统状态: 正常运行
+                <span>系统正常</span>
               </StatusItem>
               <StatusItem>
-                活跃策略数: 8/10
-              </StatusItem>
-              <StatusItem>
-                今日告警: 12
-              </StatusItem>
-              <StatusItem>
-                运行时长: 24天12小时
+                <StatusLight status="warning" />
+                <span>API延迟: 230ms</span>
               </StatusItem>
             </div>
             <Version>v1.0.0</Version>

@@ -1,0 +1,1252 @@
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import styled from 'styled-components';
+import { 
+  apiConfigAccess, 
+  ApiConfigModel, 
+  exchangeConfigAccess, 
+  ExchangeConfigModel,
+  tokenConfigAccess,
+  TokenConfigModel,
+  ChainConfigModel,
+  chainConfigAccess
+} from '../services/database';
+import { initDatabase, initSampleData } from '../services/database';
+import { ethers } from 'ethers'; // 导入ethers.js库
+import { keccak256 } from 'js-sha3'; // 导入keccak256哈希函数
+
+// 样式组件
+const PageContainer = styled.div`
+  margin-bottom: 30px;
+`;
+
+const PageHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+`;
+
+const PageTitle = styled.h1`
+  margin: 0;
+  color: white;
+  font-size: 24px;
+`;
+
+const ActionButton = styled.button`
+  background-color: #F0B90B;
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  
+  &:hover {
+    background-color: #d6a50a;
+  }
+`;
+
+const ContentLayout = styled.div`
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 20px;
+  height: calc(100vh - 200px);
+`;
+
+const ApiList = styled.div`
+  background-color: #2A2A2A;
+  border-radius: 5px;
+  overflow: hidden;
+  height: 100%;
+`;
+
+const ApiListHeader = styled.div`
+  padding: 15px;
+  border-bottom: 1px solid #3A3A3A;
+  font-size: 16px;
+  font-weight: bold;
+  color: white;
+`;
+
+const ApiItem = styled.div<{ selected: boolean }>`
+  padding: 12px 15px;
+  border-bottom: 1px solid #3A3A3A;
+  cursor: pointer;
+  background-color: ${props => props.selected ? '#3A3A3A' : 'transparent'};
+  
+  &:hover {
+    background-color: ${props => props.selected ? '#3A3A3A' : '#2F2F2F'};
+  }
+`;
+
+const ApiName = styled.div<{ selected?: boolean }>`
+  font-weight: ${props => props.selected ? 'bold' : 'normal'};
+`;
+
+const ExchangeName = styled.div`
+  font-size: 12px;
+  color: #AAAAAA;
+  margin-top: 4px;
+`;
+
+const StatusIndicator = styled.div<{ active?: boolean }>`
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  min-width: 60px;
+  text-align: center;
+  white-space: nowrap;
+  background-color: ${props => props.active ? 'rgba(0, 255, 0, 0.2)' : 'rgba(255, 0, 0, 0.2)'};
+  color: ${props => props.active ? '#00FF00' : '#FF0000'};
+  
+  &::before {
+    content: '';
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: ${props => props.active ? '#00AA00' : '#AA0000'};
+    margin-right: 6px;
+  }
+`;
+
+const ConfigPanel = styled.div`
+  background-color: #2A2A2A;
+  border-radius: 5px;
+  padding: 20px;
+  height: 100%;
+  overflow: auto;
+`;
+
+const FormSection = styled.div`
+  margin-bottom: 20px;
+`;
+
+const CollapsibleSection = styled.div`
+  margin-bottom: 20px;
+`;
+
+const CollapsibleHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px;
+  background-color: #2A2A2A;
+  border-radius: 4px;
+  cursor: pointer;
+  
+  &:hover {
+    background-color: #333333;
+  }
+`;
+
+const CollapsibleTitle = styled.h3`
+  margin: 0;
+  font-size: 16px;
+  color: #F0B90B;
+`;
+
+const CollapsibleContent = styled.div<{ isOpen: boolean }>`
+  padding: ${props => props.isOpen ? '15px' : '0'};
+  max-height: ${props => props.isOpen ? '1000px' : '0'};
+  overflow: hidden;
+  transition: all 0.3s ease;
+  opacity: ${props => props.isOpen ? '1' : '0'};
+  border: ${props => props.isOpen ? '1px solid #444444' : 'none'};
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+`;
+
+const CollapsibleIcon = styled.span`
+  font-size: 18px;
+  transition: transform 0.3s ease;
+  
+  &.open {
+    transform: rotate(180deg);
+  }
+`;
+
+const SectionTitle = styled.h2`
+  color: #F0B90B;
+  font-size: 18px;
+  margin-top: 0;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #444444;
+  padding-bottom: 8px;
+`;
+
+const FormRow = styled.div`
+  display: flex;
+  margin-bottom: 15px;
+  gap: 15px;
+`;
+
+const FormGroup = styled.div<{ flex?: number; minWidth?: string }>`
+  flex: ${props => props.flex || 1};
+  min-width: ${props => props.minWidth || 'auto'};
+`;
+
+const Label = styled.label`
+  display: block;
+  margin-bottom: 8px;
+  color: #FFFFFF;
+  font-size: 14px;
+`;
+
+const Input = styled.input`
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #2A2A2A;
+  color: #FFFFFF;
+  font-size: 14px;
+  
+  &:focus {
+    outline: none;
+    border-color: #F0B90B;
+  }
+`;
+
+const Textarea = styled.textarea`
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #2A2A2A;
+  color: #FFFFFF;
+  font-size: 14px;
+  resize: vertical;
+  min-height: 120px;
+  
+  &:focus {
+    outline: none;
+    border-color: #F0B90B;
+  }
+`;
+
+const Select = styled.select`
+  width: 100%;
+  padding: 8px 12px;
+  background-color: #333333;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  color: #FFFFFF;
+  font-size: 14px;
+  
+  &:focus {
+    border-color: #F0B90B;
+    outline: none;
+  }
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+`;
+
+const Button = styled.button<{ variant?: 'primary' | 'secondary' | 'danger' }>`
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  
+  background-color: ${props => {
+    switch(props.variant) {
+      case 'primary': return '#F0B90B';
+      case 'secondary': return '#444444';
+      case 'danger': return '#AA0000';
+      default: return '#F0B90B';
+    }
+  }};
+  
+  color: ${props => {
+    switch(props.variant) {
+      case 'primary': return '#000000';
+      case 'secondary': return '#FFFFFF';
+      case 'danger': return '#FFFFFF';
+      default: return '#000000';
+    }
+  }};
+  
+  &:hover {
+    background-color: ${props => {
+      switch(props.variant) {
+        case 'primary': return '#d6a50a';
+        case 'secondary': return '#555555';
+        case 'danger': return '#cc0000';
+        default: return '#d6a50a';
+      }
+    }};
+  }
+`;
+
+const ErrorMessage = styled.div`
+  color: #FF0000;
+  background-color: rgba(255, 0, 0, 0.1);
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+`;
+
+const LoadingIndicator = styled.div`
+  text-align: center;
+  padding: 20px;
+  color: #AAAAAA;
+  font-size: 16px;
+`;
+
+const ApiItems = styled.div`
+  overflow-y: auto;
+  flex: 1;
+`;
+
+const InfoRow = styled.div`
+  display: flex;
+  margin-bottom: 10px;
+`;
+
+const InfoLabel = styled.div`
+  width: 120px;
+  color: #AAAAAA;
+`;
+
+const InfoValue = styled.div`
+  flex: 1;
+`;
+
+const FieldRow = styled.div`
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background-color: #333333;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  align-items: center;
+`;
+
+const FieldInput = styled.div`
+  flex: 1;
+`;
+
+const RemoveButton = styled.button`
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #FF0000;
+  font-size: 16px;
+`;
+
+const AddButton = styled.button`
+  background-color: transparent;
+  color: #F0B90B;
+  border: 1px dashed #F0B90B;
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  margin-top: 10px;
+  
+  &:hover {
+    background-color: rgba(240, 185, 11, 0.1);
+  }
+`;
+
+const EmptyMessage = styled.div`
+  color: #AAAAAA;
+  font-style: italic;
+  padding: 10px;
+`;
+
+const ResultContainer = styled.div<{ success: boolean }>`
+  background-color: ${props => props.success ? '#1e3a2f' : '#3a1e1e'};
+  border: 1px solid ${props => props.success ? '#2c5c46' : '#5c2c2c'};
+  border-radius: 5px;
+  padding: 15px;
+  margin-top: 10px;
+  overflow-x: auto;
+  
+  pre {
+    margin: 0;
+    color: #e0e0e0;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+  }
+`;
+
+const LogContainer = styled.div`
+  background-color: #1e1e2e;
+  border: 1px solid #2a2a3a;
+  border-radius: 5px;
+  padding: 10px;
+  margin-top: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'Courier New', monospace;
+`;
+
+const LogItem = styled.div`
+  display: flex;
+  margin-bottom: 5px;
+  line-height: 1.5;
+`;
+
+const LogNumber = styled.span`
+  color: #7f7f7f;
+  margin-right: 10px;
+  min-width: 30px;
+  text-align: right;
+`;
+
+const LogText = styled.span`
+  color: #e0e0e0;
+`;
+
+const DetailItem = styled.div`
+  display: flex;
+  margin-bottom: 10px;
+`;
+
+const DetailLabel = styled.div`
+  width: 120px;
+  color: #AAAAAA;
+`;
+
+const DetailValue = styled.div`
+  flex: 1;
+`;
+
+const SearchContainer = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #2A2A2A;
+`;
+
+const SearchInput = styled.input`
+  background: none;
+  border: none;
+  outline: none;
+  color: #FFFFFF;
+  font-size: 14px;
+  flex: 1;
+`;
+
+const SearchIcon = styled.div`
+  color: #AAAAAA;
+  font-size: 16px;
+`;
+
+const CustomFieldsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #2A2A2A;
+  border-radius: 4px;
+  padding: 10px;
+`;
+
+const CustomFieldItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #333333;
+`;
+
+const CustomFieldName = styled.div`
+  font-weight: bold;
+  margin-bottom: 4px;
+  color: #F0B90B;
+`;
+
+const CustomFieldValue = styled.div<{ success: boolean }>`
+  font-family: monospace;
+  padding: 4px;
+  background-color: ${props => props.success ? 'rgba(0, 128, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)'};
+  border-radius: 2px;
+  color: ${props => props.success ? '#FFFFFF' : '#FF6B6B'};
+`;
+
+const ErrorContainer = styled.div`
+  background-color: rgba(255, 0, 0, 0.1);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 15px;
+`;
+
+const SuccessContainer = styled.div`
+  background-color: rgba(0, 128, 0, 0.1);
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 15px;
+`;
+
+const ProxyToggle = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 5px;
+`;
+
+const SuggestionContainer = styled.div`
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #333333;
+  border-radius: 4px;
+`;
+
+const SuggestionTitle = styled.h5`
+  margin-bottom: 10px;
+  color: #F0B90B;
+`;
+
+const SuggestionList = styled.ul`
+  list-style: none;
+  padding: 0;
+`;
+
+const SuggestionItem = styled.li`
+  cursor: pointer;
+  color: #F0B90B;
+  margin-bottom: 5px;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
+const ArrayValueContainer = styled.div`
+  margin-top: 5px;
+  padding: 5px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #333333;
+`;
+
+const ArrayValueHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+`;
+
+const ArrayValueList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin-top: 5px;
+  max-height: 100px;
+  overflow-y: auto;
+  transition: max-height 0.3s ease;
+  
+  &:not(.expanded) {
+    max-height: 100px;
+    overflow-y: hidden;
+  }
+  
+  &.expanded {
+    max-height: 300px;
+  }
+`;
+
+const ArrayValueItem = styled.li`
+  margin-bottom: 5px;
+`;
+
+const ArrayValueIndex = styled.span`
+  font-weight: bold;
+  margin-right: 5px;
+`;
+
+const ArrayValueContent = styled.span`
+  font-family: monospace;
+  padding: 4px;
+  background-color: #2A2A2A;
+  border-radius: 2px;
+  color: #FFFFFF;
+`;
+
+const ArrayToggle = styled.span`
+  cursor: pointer;
+  color: #AAAAAA;
+  font-size: 12px;
+`;
+
+// 添加哈希计算相关的样式组件
+const HashCalculatorContainer = styled.div`
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #2A2A2A;
+  border-radius: 4px;
+  border: 1px solid #444444;
+`;
+
+const HashTitle = styled.h3`
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  color: #F0B90B;
+`;
+
+const HashInputRow = styled.div`
+  display: flex;
+  margin-bottom: 10px;
+  gap: 10px;
+`;
+
+const HashInput = styled.input`
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #2A2A2A;
+  color: #FFFFFF;
+  font-size: 14px;
+  
+  &:focus {
+    outline: none;
+    border-color: #F0B90B;
+  }
+`;
+
+const HashSelect = styled.select`
+  padding: 8px 12px;
+  border: 1px solid #444444;
+  border-radius: 4px;
+  background-color: #2A2A2A;
+  color: #FFFFFF;
+  font-size: 14px;
+  min-width: 150px;
+  
+  &:focus {
+    outline: none;
+    border-color: #F0B90B;
+  }
+`;
+
+const HashButton = styled.button`
+  padding: 8px 15px;
+  background-color: #F0B90B;
+  color: #000000;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+  
+  &:hover {
+    background-color: #d6a50a;
+  }
+  
+  &:disabled {
+    background-color: #5a5a5a;
+    cursor: not-allowed;
+  }
+`;
+
+const HashResult = styled.div`
+  margin-top: 10px;
+  word-break: break-all;
+  font-family: monospace;
+  padding: 10px;
+  background-color: #1A1A1A;
+  border-radius: 4px;
+  border: 1px solid #333333;
+`;
+
+const HashVerification = styled.div<{ isValid: boolean }>`
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: ${props => props.isValid ? 'rgba(0, 255, 0, 0.1)' : 'rgba(255, 0, 0, 0.1)'};
+  color: ${props => props.isValid ? '#00FF00' : '#FF0000'};
+  font-weight: bold;
+  text-align: center;
+`;
+
+// 预设API配置
+const PRESET_APIS = [
+  {
+    name: "Binance 价格API",
+    baseUrl: "https://api.binance.com/api/v3/ticker/price",
+    fieldMappings: [
+      { customName: "symbol", displayName: "交易对", jsonPath: "symbol" },
+      { customName: "price", displayName: "价格", jsonPath: "price" }
+    ]
+  },
+  {
+    name: "Ethereum Gas API",
+    baseUrl: "https://api.etherscan.io/api?module=gastracker&action=gasoracle",
+    fieldMappings: [
+      { customName: "fastGas", displayName: "快速Gas价格", jsonPath: "result.FastGasPrice" },
+      { customName: "standardGas", displayName: "标准Gas价格", jsonPath: "result.ProposeGasPrice" },
+      { customName: "slowGas", displayName: "慢速Gas价格", jsonPath: "result.SafeGasPrice" }
+    ]
+  }
+];
+
+const ApiConfig: React.FC = () => {
+  const [apis, setApis] = useState<ApiConfigModel[]>([]);
+  const [exchanges, setExchanges] = useState<ExchangeConfigModel[]>([]);
+  const [tokens, setTokens] = useState<TokenConfigModel[]>([]);
+  const [chains, setChains] = useState<ChainConfigModel[]>([]);
+  const [selectedApi, setSelectedApi] = useState<ApiConfigModel | null>(null);
+  const [editedApi, setEditedApi] = useState<ApiConfigModel | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{success: boolean, data: any} | null>(null);
+  const [testVariables, setTestVariables] = useState<{[key: string]: string}>({});
+  const [detectedVariables, setDetectedVariables] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [useProxyToggle, setUseProxyToggle] = useState(false);
+  
+  // 合约方法列表
+  const [contractMethods, setContractMethods] = useState<{name: string, inputs: {name: string, type: string}[]}[]>([]);
+  const [isLoadingMethods, setIsLoadingMethods] = useState(false);
+  
+  // 折叠状态
+  const [isApiKeySectionOpen, setIsApiKeySectionOpen] = useState(false);
+  const [isExchangeSectionOpen, setIsExchangeSectionOpen] = useState(false);
+  const [isFieldMappingSectionOpen, setIsFieldMappingSectionOpen] = useState(true);
+  const [isHashCalculatorOpen, setIsHashCalculatorOpen] = useState(false); // 哈希计算器折叠状态，默认收缩
+  
+  // 添加哈希计算相关的状态
+  const [hashInput, setHashInput] = useState('');
+  const [hashResult, setHashResult] = useState('');
+  const [hashVerification, setHashVerification] = useState('');
+  const [isHashValid, setIsHashValid] = useState(false);
+  const [selectedField, setSelectedField] = useState('');
+  const [expectedHash, setExpectedHash] = useState('');
+  
+  // 加载数据
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        setError(null); // 清除之前的错误
+        
+        console.log("ApiConfig: 开始加载数据...");
+        
+        // 确保数据库已初始化
+        const db = await initDatabase();
+        console.log("ApiConfig: 数据库初始化完成", db);
+        
+        // 初始化示例数据（如果需要）
+        await initSampleData();
+        
+        // 获取API数据
+        console.log("ApiConfig: 正在获取API数据...");
+        const apisData = await apiConfigAccess.getAll();
+        console.log("ApiConfig: 获取到API数据", apisData);
+        setApis(apisData);
+        
+        // 获取交易所数据
+        console.log("ApiConfig: 正在获取交易所数据...");
+        const exchangesData = await exchangeConfigAccess.getAll();
+        console.log("ApiConfig: 获取到交易所数据", exchangesData);
+        setExchanges(exchangesData);
+        
+        // 获取Token数据
+        console.log("ApiConfig: 正在获取Token数据...");
+        const tokensData = await tokenConfigAccess.getAll();
+        console.log("ApiConfig: 获取到Token数据", tokensData);
+        setTokens(tokensData);
+        
+        // 获取链配置数据
+        console.log("ApiConfig: 正在获取链配置数据...");
+        const chainsData = await chainConfigAccess.getAll();
+        console.log("ApiConfig: 获取到链配置数据", chainsData);
+        setChains(chainsData);
+        
+        // 如果有API数据且没有选中的API，默认选择第一个
+        if (apisData.length > 0 && !selectedApi) {
+          setSelectedApi(apisData[0]);
+        }
+        
+        setIsLoading(false);
+      } catch (err) {
+        setIsLoading(false);
+        setError('加载数据失败: ' + (err instanceof Error ? err.message : String(err)));
+        console.error('加载API配置数据失败:', err);
+      }
+    };
+    
+    loadData();
+  }, [selectedApi]);
+  
+  // 监听 editedApi 变化，更新变量
+  useEffect(() => {
+    if (editedApi) {
+      updateDetectedVariables();
+    }
+  }, [editedApi?.baseUrl, editedApi?.payload, editedApi?.method]);
+  
+  // 验证API名称唯一性
+  const validateApiUniqueness = async (api: ApiConfigModel, isNew: boolean): Promise<string | null> => {
+    // 获取所有API
+    const allApis = await apiConfigAccess.getAll();
+    
+    // 检查名称唯一性
+    const nameExists = allApis.some(a => 
+      a.name.toLowerCase() === api.name.toLowerCase() && 
+      (isNew || a.NO !== api.NO)
+    );
+    
+    if (nameExists) {
+      return `API名称 "${api.name}" 已存在，请使用其他名称`;
+    }
+    
+    return null;
+  };
+  
+  // 处理预设API选择
+  const handlePresetApiSelect = (preset: typeof PRESET_APIS[0]) => {
+    if (editedApi) {
+      setEditedApi({
+        ...editedApi,
+        name: preset.name,
+        baseUrl: preset.baseUrl,
+        fieldMappings: preset.fieldMappings ? [...preset.fieldMappings] : undefined
+      });
+      
+      // 延迟更新变量，确保 editedApi 已经更新
+      setTimeout(updateDetectedVariables, 100);
+    }
+  };
+  
+  // 选择API
+  const handleApiSelect = (api: ApiConfigModel) => {
+    setSelectedApi(api);
+    setIsEditing(false);
+    // 清空测试结果和测试变量
+    setTestResult(null);
+    setTestVariables({});
+    setError(null);
+  };
+  
+  // 添加API
+  const handleAddApi = () => {
+    // 创建新的API配置
+    const newApi: ApiConfigModel = {
+      name: '',
+      baseUrl: '',
+      method: 'GET',
+      apiType: 'HTTP', // 默认为HTTP类型
+      active: true,
+      fieldMappings: []
+    };
+    
+    setSelectedApi(null);
+    setEditedApi(newApi);
+    setIsEditing(true);
+    setTestResult(null);
+    setTestVariables({});
+    setError(null);
+    
+    // 重置折叠状态
+    setIsApiKeySectionOpen(false);
+    setIsExchangeSectionOpen(false);
+    setIsFieldMappingSectionOpen(true);
+    setIsHashCalculatorOpen(false); // 确保哈希计算器默认收缩
+    
+    // 清空变量列表
+    setDetectedVariables([]);
+  };
+  
+  // 编辑API
+  const handleEditApi = () => {
+    if (!selectedApi) return;
+    
+    // 创建一个深拷贝，避免直接修改selectedApi
+    setEditedApi(JSON.parse(JSON.stringify(selectedApi)));
+    
+    // 如果有保存的自定义变量值，加载它们
+    if (selectedApi.customVariables) {
+      setTestVariables(selectedApi.customVariables);
+    } else {
+      setTestVariables({});
+    }
+    
+    setIsEditing(true);
+    setTestResult(null);
+    setError(null);
+    
+    // 重置折叠状态
+    setIsApiKeySectionOpen(false);
+    setIsExchangeSectionOpen(false);
+    setIsFieldMappingSectionOpen(true);
+    setIsHashCalculatorOpen(false); // 确保哈希计算器默认收缩
+    
+    // 延迟更新变量，确保 editedApi 已经设置
+    setTimeout(updateDetectedVariables, 100);
+  };
+  
+  // 保存API
+  const handleSaveApi = async () => {
+    if (!editedApi) return;
+    
+    // 验证必填字段
+    if (!editedApi.name.trim()) {
+      setError('API名称不能为空');
+      return;
+    }
+    
+    if (!editedApi.baseUrl.trim()) {
+      setError('API基础URL不能为空');
+      return;
+    }
+    
+    // 验证字段映射（如果有）
+    if (editedApi.fieldMappings && editedApi.fieldMappings.length > 0) {
+      for (const mapping of editedApi.fieldMappings) {
+        if (!mapping.customName.trim()) {
+          setError('自定义字段名不能为空');
+          return;
+        }
+        
+        if (!mapping.displayName.trim()) {
+          setError('显示名称不能为空');
+          return;
+        }
+        
+        if (!mapping.jsonPath.trim()) {
+          setError('JSON路径不能为空');
+          return;
+        }
+      }
+    }
+    
+    try {
+      // 验证API名称唯一性
+      const validationError = await validateApiUniqueness(editedApi, !editedApi.NO);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+      
+      // 保存用户输入的自定义变量值
+      // 将testVariables保存到editedApi中
+      if (Object.keys(testVariables).length > 0) {
+        editedApi.customVariables = testVariables;
+      }
+      
+      let savedApiNo: number;
+      
+      // 如果是新API（没有NO字段），则创建新记录
+      if (!editedApi.NO) {
+        savedApiNo = await apiConfigAccess.create(editedApi);
+        
+        // 获取最新的API列表
+        const updatedApis = await apiConfigAccess.getAll();
+        setApis(updatedApis);
+        
+        // 查找并选择新创建的API
+        const newApi = updatedApis.find(a => a.NO === savedApiNo);
+        if (newApi) {
+          setSelectedApi(newApi);
+        }
+      } else {
+        // 如果是编辑现有API，则更新记录
+        await apiConfigAccess.update(editedApi.NO, editedApi);
+        
+        // 获取最新的API列表
+        const updatedApis = await apiConfigAccess.getAll();
+        setApis(updatedApis);
+        
+        // 更新选中的API
+        const updatedApi = updatedApis.find(a => a.NO === editedApi.NO);
+        if (updatedApi) {
+          setSelectedApi(updatedApi);
+        }
+      }
+      
+      setIsEditing(false);
+      setError(null);
+    } catch (err) {
+      console.error('Failed to save API:', err);
+      setError('保存API失败，请检查输入数据');
+    }
+  };
+  
+  // 取消编辑
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedApi(null);
+    
+    // 如果是新建的API且尚未保存，则清除选中状态
+    if (selectedApi && !selectedApi.NO) {
+      setSelectedApi(apis.length > 0 ? apis[0] : null);
+    }
+  };
+  
+  // 删除API
+  const handleDeleteApi = async () => {
+    if (!selectedApi || !selectedApi.NO) return;
+    
+    if (window.confirm(`确定要删除 ${selectedApi.name} 吗？`)) {
+      try {
+        await apiConfigAccess.delete(selectedApi.NO);
+        
+        // 获取最新的API列表
+        const updatedApis = await apiConfigAccess.getAll();
+        setApis(updatedApis);
+        
+        // 如果还有API，选择第一个；否则清空选择
+        if (updatedApis.length > 0) {
+          setSelectedApi(updatedApis[0]);
+        } else {
+          setSelectedApi(null);
+        }
+        
+        setError(null);
+      } catch (err) {
+        console.error('Failed to delete API:', err);
+        setError('删除API失败');
+      }
+    }
+  };
+  
+  // 切换API状态
+  const handleToggleStatus = async (api: ApiConfigModel) => {
+    try {
+      const updatedApi = { ...api, active: !api.active };
+      
+      // 更新数据库
+      await apiConfigAccess.update(api.NO!, updatedApi);
+      
+      // 刷新列表
+      const updatedApis = await apiConfigAccess.getAll();
+      setApis(updatedApis);
+      
+      // 如果当前选中的是被修改的API，更新选中状态
+      if (selectedApi && selectedApi.NO === api.NO) {
+        setSelectedApi(updatedApi);
+      }
+    } catch (err) {
+      console.error('切换API状态失败', err);
+      setError('切换API状态失败');
+    }
+  };
+  
+  // 提取URL或Payload中的变量
+  const extractVariables = (text: string) => {
+    if (!text) return [];
+    
+    // 修改正则表达式，使用()作为变量标识符，包括双引号内的变量
+    // 例如："sellToken":"(sellToken)" 中的 (sellToken)
+    const regex = /\(([^()]+)\)/g;
+    const matches = text.match(regex) || [];
+    
+    // 提取变量名，不再过滤appData相关的匹配
+    // 因为现在我们需要检测到如 "appDataHash": "(appData)" 这样的变量
+    return matches.map(match => match.slice(1, -1));
+  };
+  
+  // 替换URL或Payload中的变量
+  const replaceVariables = (text: string, variables: Record<string, string>) => {
+    if (!text) return text;
+    
+    // 创建一个新的文本副本
+    let result = text;
+    
+    // 处理普通变量替换，使用()作为变量标识符，包括双引号内的变量
+    Object.entries(variables).forEach(([key, value]) => {
+      // 创建一个正则表达式，匹配包括在双引号内的变量
+      // 例如："sellToken":"(sellToken)" 中的 (sellToken)
+      const regex = new RegExp(`\\(${key}\\)`, 'g');
+      
+      // 如果变量值是地址或数字，直接替换
+      // 如果是在双引号内的变量，需要保留双引号
+      if (result.includes(`"(${key})"`)) {
+        // 在双引号内的变量，例如："(sellToken)"
+        const quotedRegex = new RegExp(`"\\(${key}\\)"`, 'g');
+        // 如果值看起来像地址（0x开头），不添加额外的引号
+        if (value.startsWith('0x')) {
+          result = result.replace(quotedRegex, `"${value}"`);
+        } else {
+          // 尝试解析为数字，如果是数字则不添加引号
+          const numValue = Number(value);
+          if (!isNaN(numValue)) {
+            result = result.replace(quotedRegex, `${numValue}`);
+          } else {
+            result = result.replace(quotedRegex, `"${value}"`);
+          }
+        }
+      }
+      
+      // 处理非双引号内的变量
+      result = result.replace(regex, value);
+    });
+    
+    return result;
+  };
+  
+  // 实时解析并更新变量列表
+  const updateDetectedVariables = () => {
+    if (!editedApi) return;
+    
+    // 提取URL中的变量
+    const urlVariables = extractVariables(editedApi.baseUrl);
+    
+    // 提取Payload中的变量（如果有）
+    const payloadVariables = editedApi.method === 'POST' && editedApi.payload 
+      ? extractVariables(editedApi.payload) 
+      : [];
+    
+    // 合并所有变量并去重
+    const allVariables = Array.from(new Set([...urlVariables, ...payloadVariables]));
+    
+    // 更新检测到的变量列表
+    setDetectedVariables(allVariables);
+    
+    // 初始化新变量的值
+    const updatedVariables = { ...testVariables };
+    let hasNewVariables = false;
+    
+    allVariables.forEach(variable => {
+      if (!(variable in updatedVariables)) {
+        updatedVariables[variable] = '';
+        hasNewVariables = true;
+      }
+    });
+    
+    // 如果有新变量，更新测试变量对象
+    if (hasNewVariables) {
+      setTestVariables(updatedVariables);
+    }
+    
+    // 调试输出，帮助排查问题
+    console.log('检测到的变量:', allVariables);
+    console.log('URL变量:', urlVariables);
+    console.log('Payload变量:', payloadVariables);
+  };
+  
+  // 测试API
+  const handleTestApi = async () => {
+    if (!editedApi) return;
+    
+    try {
+      setIsTesting(true);
+      setTestResult(null);
+      setError(null);
+      
+      // 替换变量
+      let targetUrl = editedApi.baseUrl;
+      let payload = editedApi.payload;
+      
+      if (editedApi.apiType === 'CHAIN') {
+        // 链上数据类型API测试
+        if (!editedApi.chainId) {
+          throw new Error('请选择链');
+        }
+        
+        if (!editedApi.contractAddress) {
+          throw new Error('请输入合约地址');
+        }
+        
+        if (!editedApi.methodName) {
+          throw new Error('请输入方法名称');
+        }
+        
+        // 记录访问过程
+        const logs: string[] = [];
+        logs.push(`开始测试链上数据API - 合约地址: ${editedApi.contractAddress}, 链ID: ${editedApi.chainId}, 方法: ${editedApi.methodName}`);
+        
+        // 查找选中的链
+        const selectedChain = chains.find(chain => chain.chainId === editedApi.chainId);
+        if (!selectedChain || !selectedChain.rpcUrls || selectedChain.rpcUrls.length === 0) {
+          throw new Error(`找不到链ID为 ${editedApi.chainId} 的RPC URL`);
+        }
+        
+        const rpcUrl = selectedChain.rpcUrls[0];
+        logs.push(`使用RPC URL: ${rpcUrl}`);
+        
+        // 使用ethers.js连接到区块链
+        logs.push(`正在连接到区块链...`);
+        const provider = new ethers.providers.JsonRpcProvider(rpcUrl);
+        
+        try {
+          // 检查连接
+          logs.push(`正在检查区块链连接...`);
+          const blockNumber = await provider.getBlockNumber();
+          logs.push(`连接成功，当前区块高度: ${blockNumber}`);
+        } catch (error) {
+          logs.push(`连接失败: ${error instanceof Error ? error.message : String(error)}`);
+          throw new Error(`连接到区块链失败: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        
+        // 检查合约地址是否有效
+        logs.push(`正在验证合约地址...`);
+        if (!ethers.utils.isAddress(editedApi.contractAddress)) {
+          logs.push(`合约地址无效: ${editedApi.contractAddress}`);
+          throw new Error(`合约地址无效: ${editedApi.contractAddress}`);
+        }
+        
+        logs.push(`正在获取合约代码...`);
+        const code = await provider.getCode(editedApi.contractAddress);
+        if (code === '0x') {
+          logs.push(`地址 ${editedApi.contractAddress} 不是合约地址`);
+          throw new Error(`地址 ${editedApi.contractAddress} 不是合约地址`);
+        }
+        
+        logs.push(`合约代码长度: ${code.length} 字节`);
+        
+        // 准备方法参数
+        const methodParams = editedApi.methodParams || [];
+        const params = methodParams.map(param => {
+          // 替换变量
+          let value = param.value || '';
+          if (value.includes('(') && value.includes(')')) {
+            // 提取变量名
+            const variableName = value.match(/\(([^()]+)\)/)?.[1];
+            if (variableName && testVariables[variableName]) {
+              value = value.replace(`(${variableName})`, testVariables[variableName]);
+            }
+          }
+          
+          // 根据参数类型转换值
+          if (param.type.includes('int')) {
+            // 对于整数类型，尝试转换为数字
+            return ethers.BigNumber.from(value || '0');
+          } else if (param.type === 'address') {
+            // 对于地址类型，确保是有效的地址
+            if (!value || !ethers.utils.isAddress(value)) {
+              logs.push(`警告: 参数 ${param.name} 不是有效的地址，使用零地址代替`);
+              return ethers.constants.AddressZero;
+            }
+            return value;
+          } else if (param.type === 'bool') {
+            // 对于布尔类型，转换为布尔值
+            return value.toLowerCase() === 'true';
+          } else {
+            // 其他类型，如字符串，直接使用
+            return value;
+          }
+        });
+        
+        logs.push(`方法参数准备完成: ${JSON.stringify(params)}`);
+        
+        // 创建接口和合约实例
+        logs.push(`正在创建合约实例...`);
+        
+        // 创建方法签名
+        let methodSignature = `function ${editedApi.methodName}(${methodParams.map((p: any) => `${p.type} ${p.name}`).join(', ')})`;
+        logs.push(`方法签名: ${methodSignature}`);
+        
+        try {
+          // 创建接口
+          const iface = new ethers.utils.Interface([methodSignature]);
+          
+          // 创建合约实例
+          const contract = new ethers.Contract(editedApi.contractAddress, iface, provider);
+          
+          // 调用合约方法
